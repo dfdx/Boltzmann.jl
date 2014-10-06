@@ -2,7 +2,6 @@
 using StatsBase
 using Distributions
 using Base.LinAlg.BLAS
-import StatsBase.fit
 
 abstract RBM
 
@@ -115,7 +114,7 @@ function fit_batch!{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64};
 end
 
 
-function fit!{RBM <: RBM}(rbm::RBM, X::Matrix{Float64};
+function fit{RBM <: RBM}(rbm::RBM, X::Matrix{Float64};
               lr=0.1, n_iter=10, batch_size=10, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
@@ -132,6 +131,7 @@ function fit!{RBM <: RBM}(rbm::RBM, X::Matrix{Float64};
                 itr, mean(score_samples(rbm, X)))
     end
 end
+
 
 
 function transform{RBM <: RBM}(rbm::RBM, X::Matrix{Float64})
