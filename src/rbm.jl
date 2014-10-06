@@ -25,14 +25,24 @@ type GRBM <: RBM
 end
 
 
-function expit(x)
+function Base.show(io::IO, m::BernoulliRBM)
+    print(io, "BernoulliRBM($(length(m.vbias)), $(length(m.hbias)))")
+end
+
+
+function Base.show(io::IO, m::GRBM)
+    print(io, "GRBM($(length(m.vbias)), $(length(m.hbias)))")
+end
+
+
+function logistic(x)
     return 1 ./ (1 + exp(-x))
 end
 
 
 function mean_hiddens{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64})
     p = rbm.weights * vis .+ rbm.hbias
-    return expit(p)
+    return logistic(p)
 end
 
 
@@ -44,13 +54,13 @@ end
 
 function sample_visibles(rbm::BernoulliRBM, hid::Matrix{Float64})
     p = rbm.weights' * hid .+ rbm.vbias
-    p = expit(p)
+    p = logistic(p)
     return float(rand(size(p)) .< p)
 end
 
 
 function sample_visibles(rbm::GRBM, hid::Matrix{Float64})
-    mu = expit(rbm.weights' * hid .+ rbm.vbias)
+    mu = logistic(rbm.weights' * hid .+ rbm.vbias)
     sigmasq = 0.01                   # using fixed standard diviation
     samples = zeros(size(mu))
     for j=1:size(mu, 2), i=1:size(mu, 1)
@@ -89,7 +99,7 @@ function score_samples{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64})
     end
     fe = free_energy(rbm, vis)
     fe_corrupted = free_energy(rbm, vis_corrupted)
-    return n_feat * log(expit(fe_corrupted - fe))    
+    return n_feat * log(logistic(fe_corrupted - fe))    
 end
 
 
