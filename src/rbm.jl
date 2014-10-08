@@ -114,17 +114,6 @@ function score_samples{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64})
 end
 
 
-# TODO: remove
-function mkAll(rows=100, cols=200)
-    X = randn(rows, cols)
-    X = X / (maximum(X) - minimum(X))
-    X = X - minimum(X)
-    rbm = GRBM(100, 50)
-    return rbm, X
-end
-using PyPlot
-ihist(X) = plt.hist(reshape(X, prod(size(X))), bins=100)
-
 function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     dW = buf
     # dW = (h_pos * v_pos') - (h_neg * v_neg')
