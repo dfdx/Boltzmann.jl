@@ -1,5 +1,4 @@
 
-using StatsBase
 using Distributions
 using Base.LinAlg.BLAS
 
@@ -8,31 +7,43 @@ abstract RBM
 type BernoulliRBM <: RBM
     weights::Matrix{Float64}
     vbias::Vector{Float64}
-    hbias::Vector{Float64}    
-    BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.001) =
-        new(rand(Normal(0, sigma), (n_hid, n_vis)), zeros(n_vis), zeros(n_hid))
-    BernoulliRBM(weights, vbias, hbias) = new(weights, vbias, hbias)
+    hbias::Vector{Float64}
+    dW_prev::Matrix{Float64}
+    momentum::Float64
+    function BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
+        new(rand(Normal(0, sigma), (n_hid, n_vis)),
+            zeros(n_vis), zeros(n_hid),
+            zeros(n_hid, n_vis),
+            momentum)
+    end
+    function Base.show(io::IO, rbm::BernoulliRBM)
+        n_vis = size(rbm.vbias, 1)
+        n_hid = size(rbm.hbias, 1)
+        print("BernoulliRBM($n_vis, $n_hid)")
+    end
 end
     
     
 type GRBM <: RBM
     weights::Matrix{Float64}
     vbias::Vector{Float64}
-    hbias::Vector{Float64}    
-    GRBM(n_vis::Int, n_hid::Int; sigma=0.001) =
-        new(rand(Normal(0, sigma), (n_hid, n_vis)), zeros(n_vis), zeros(n_hid))
-    GRBM(weights, vbias, hbias) = new(weights, vbias, hbias)
+    hbias::Vector{Float64}
+    dW_prev::Matrix{Float64}
+    momentum::Float64
+    function GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
+        new(rand(Normal(0, sigma), (n_hid, n_vis)),
+            zeros(n_vis), zeros(n_hid),
+            zeros(n_hid, n_vis),
+            momentum)
+    end
+    function Base.show(io::IO, rbm::GRBM)
+        n_vis = size(rbm.vbias, 1)
+        n_hid = size(rbm.hbias, 1)
+        print("GRBM($n_vis, $n_hid)")
+    end
 end
 
 
-function Base.show(io::IO, m::BernoulliRBM)
-    print(io, "BernoulliRBM($(length(m.vbias)), $(length(m.hbias)))")
-end
-
-
-function Base.show(io::IO, m::GRBM)
-    print(io, "GRBM($(length(m.vbias)), $(length(m.hbias)))")
-end
 
 
 function logistic(x)
@@ -61,22 +72,22 @@ end
 
 function sample_visibles(rbm::GRBM, hid::Matrix{Float64})
     mu = logistic(rbm.weights' * hid .+ rbm.vbias)
-    sigmasq = 0.01                   # using fixed standard diviation
+    sigma2 = 0.01                   # using fixed standard diviation
     samples = zeros(size(mu))
     for j=1:size(mu, 2), i=1:size(mu, 1)
-        samples[i, j] = rand(Normal(mu[i, j], sigmasq))
+        samples[i, j] = rand(Normal(mu[i, j], sigma2))
     end
     return samples
 end
 
 
 function gibbs{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64}; n_times=1)
-    v_pos = v_neg = vis
-    # h_pos = h_neg = mean_hiddens(rbm, v_pos)
-    h_pos = h_neg = sample_hiddens(rbm, v_pos)
+    v_pos = vis
+    h_pos = sample_hiddens(rbm, v_pos)
+    v_neg = sample_visibles(rbm, h_pos)
+    h_neg = sample_hiddens(rbm, v_neg)
     for i=1:n_times-1
         v_neg = sample_visibles(rbm, h_neg)
-        # h_neg = mean_hiddens(rbm, v_neg)
         h_neg = sample_hiddens(rbm, v_neg)
     end
     return v_pos, h_pos, v_neg, h_neg
@@ -103,18 +114,34 @@ function score_samples{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64})
 end
 
 
-function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, upd_buf)
-    # upd = (h_pos * v_pos') - (h_neg * v_neg') 
-    upd_buf = gemm!('N', 'N', 1.0, h_neg, v_neg', 0.0, upd_buf)
-    upd_buf = gemm!('N', 'N', 1.0, h_pos, v_pos', -1.0, upd_buf)
-    # rbm.weights += lr * upd
-    axpy!(lr, upd_buf, rbm.weights)
+# TODO: remove
+function mkAll(rows=100, cols=200)
+    X = randn(rows, cols)
+    X = X / (maximum(X) - minimum(X))
+    X = X - minimum(X)
+    rbm = GRBM(100, 50)
+    return rbm, X
+end
+using PyPlot
+ihist(X) = plt.hist(reshape(X, prod(size(X))), bins=100)
+
+function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
+    dW = buf
+    # dW = (h_pos * v_pos') - (h_neg * v_neg')
+    gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
+    gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
+    # rbm.weights += lr * dW
+    axpy!(lr, dW, rbm.weights)
+    # rbm.weights += momentum * rbm.dW_prev
+    axpy!(lr * rbm.momentum, rbm.dW_prev, rbm.weights)
+    # save current dW
+    copy!(rbm.dW_prev, dW)
 end
 
 
 function fit_batch!{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64};
                     buf=None, lr=0.1, n_gibbs=1)
-    buf = buf == None ? zeros(size(model.weights)) : buf 
+    buf = buf == None ? zeros(size(rbm.weights)) : buf 
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     lr = lr / size(v_pos, 1)
     update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
@@ -141,7 +168,6 @@ function fit{RBM <: RBM}(rbm::RBM, X::Matrix{Float64};
                 itr, mean(score_samples(rbm, X)))
     end
 end
-
 
 
 function transform{RBM <: RBM}(rbm::RBM, X::Matrix{Float64})
