@@ -4,6 +4,9 @@ using Base.LinAlg.BLAS
 
 abstract RBM
 
+typealias Matrix{T} AbstractArray{T, 2}
+typealias Vector{T} AbstractArray{T, 1}
+
 type BernoulliRBM <: RBM
     weights::Matrix{Float64}
     vbias::Vector{Float64}
@@ -108,21 +111,22 @@ function score_samples{RBM <: RBM}(rbm::RBM, vis::Matrix{Float64})
     for (i, j) in zip(idxs, 1:n_samples)    
         vis_corrupted[i, j] = 1 - vis_corrupted[i, j]
     end
-    fe = free_energy(rbm, vis)
-    fe_corrupted = free_energy(rbm, vis_corrupted)
-    return n_feat * log(logistic(fe_corrupted - fe))    
+    return 1
+    # fe = free_energy(rbm, vis)
+    # fe_corrupted = free_energy(rbm, vis_corrupted)
+    # return n_feat * log(logistic(fe_corrupted - fe))    
 end
 
 
 function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     dW = buf
-    # dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
-    gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
-    # rbm.weights += lr * dW
-    axpy!(lr, dW, rbm.weights)
-    # rbm.weights += momentum * rbm.dW_prev
-    axpy!(lr * rbm.momentum, rbm.dW_prev, rbm.weights)
+    dW = (h_pos * v_pos') - (h_neg * v_neg')
+    # gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
+    # gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
+    rbm.weights += lr * dW
+    # axpy!(lr, dW, rbm.weights)
+    rbm.weights += rbm.momentum * rbm.dW_prev
+    # axpy!(lr * rbm.momentum, rbm.dW_prev, rbm.weights)
     # save current dW
     copy!(rbm.dW_prev, dW)
 end
