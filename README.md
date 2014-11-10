@@ -11,5 +11,5 @@ Usage:
 
     X = ...  # data matrix, observations as columns, variables as rows
     model = GRBM(n_visibles, n_hiddens)
-    fit!(model, X, n_iter=10, n_gibbs=3, lr=0.1)
+    fit(model, X, n_iter=10, n_gibbs=3, lr=0.1)
     model.weights[1:10, :]  # matrix of learned weights; unlike data matrix, learned components are on rows, not columns
