@@ -143,7 +143,7 @@ end
 
 
 function fit{RBM <: RBM}(rbm::RBM, X::Mat{Float64};
-              lr=0.1, n_iter=10, batch_size=10, n_gibbs=1)
+              lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
     n_batches = int(ceil(n_samples / batch_size))
@@ -151,6 +151,7 @@ function fit{RBM <: RBM}(rbm::RBM, X::Mat{Float64};
     for itr=1:n_iter
         tic()
         for i=1:n_batches
+            println("fitting $(i)th batch")
             batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
             fit_batch!(rbm, batch, buf=w_buf, n_gibbs=n_gibbs)
         end
