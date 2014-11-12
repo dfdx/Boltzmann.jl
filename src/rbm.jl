@@ -102,29 +102,34 @@ function free_energy{RBM <: RBM}(rbm::RBM, vis::Mat{Float64})
 end
 
 
-function score_samples{RBM <: RBM}(rbm::RBM, vis::Mat{Float64})
+function score_samples{RBM <: RBM}(rbm::RBM, vis::Mat{Float64}; sample_size=10000)
+    if issparse(vis)
+        # sparse matrices may be infeasible for this operation
+        # so using only little sparse
+        cols = sample(1:size(vis, 2), sample_size)
+        vis = full(vis[:, cols])
+    end
     n_feat, n_samples = size(vis)
     vis_corrupted = copy(vis)
     idxs = rand(1:n_feat, n_samples)
     for (i, j) in zip(idxs, 1:n_samples)    
         vis_corrupted[i, j] = 1 - vis_corrupted[i, j]
     end
-    return 1
-    # fe = free_energy(rbm, vis)
-    # fe_corrupted = free_energy(rbm, vis_corrupted)
-    # return n_feat * log(logistic(fe_corrupted - fe))    
+    fe = free_energy(rbm, vis)
+    fe_corrupted = free_energy(rbm, vis_corrupted)
+    return n_feat * log(logistic(fe_corrupted - fe))    
 end
 
 
 function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     dW = buf
-    dW = (h_pos * v_pos') - (h_neg * v_neg')
-    # gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
-    # gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
+    # dW = (h_pos * v_pos') - (h_neg * v_neg')
+    gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
+    gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
     rbm.W += lr * dW
-    # axpy!(lr, dW, rbm.W)
-    rbm.W += rbm.momentum * rbm.dW_prev
-    # axpy!(lr * rbm.momentum, rbm.dW_prev, rbm.W)
+    axpy!(lr, dW, rbm.W)
+    # rbm.W += rbm.momentum * rbm.dW_prev
+    axpy!(lr * rbm.momentum, rbm.dW_prev, rbm.W)
     # save current dW
     copy!(rbm.dW_prev, dW)
 end
@@ -153,6 +158,7 @@ function fit{RBM <: RBM}(rbm::RBM, X::Mat{Float64};
         for i=1:n_batches
             println("fitting $(i)th batch")
             batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
+            batch = full(batch)
             fit_batch!(rbm, batch, buf=w_buf, n_gibbs=n_gibbs)
         end
         toc()
