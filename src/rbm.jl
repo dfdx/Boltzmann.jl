@@ -156,7 +156,7 @@ function fit{RBM <: RBM}(rbm::RBM, X::Mat{Float64};
     for itr=1:n_iter
         tic()
         for i=1:n_batches
-            println("fitting $(i)th batch")
+            # println("fitting $(i)th batch")
             batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
             batch = full(batch)
             fit_batch!(rbm, batch, buf=w_buf, n_gibbs=n_gibbs)
