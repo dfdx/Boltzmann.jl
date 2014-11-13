@@ -52,13 +52,13 @@ function logistic(x)
 end
 
 
-function mean_hiddens{RBM <: RBM}(rbm::RBM, vis::Mat{Float64})
+function mean_hiddens(rbm::RBM, vis::Mat{Float64})
     p = rbm.W * vis .+ rbm.hbias
     return logistic(p)
 end
 
 
-function sample_hiddens{RBM <: RBM}(rbm::RBM, vis::Mat{Float64})
+function sample_hiddens(rbm::RBM, vis::Mat{Float64})
     p = mean_hiddens(rbm, vis)
     return float(rand(size(p)) .< p)
 end
@@ -82,7 +82,7 @@ function sample_visibles(rbm::GRBM, hid::Mat{Float64})
 end
 
 
-function gibbs{RBM <: RBM}(rbm::RBM, vis::Mat{Float64}; n_times=1)
+function gibbs(rbm::RBM, vis::Mat{Float64}; n_times=1)
     v_pos = vis
     h_pos = sample_hiddens(rbm, v_pos)
     v_neg = sample_visibles(rbm, h_pos)
@@ -95,14 +95,14 @@ function gibbs{RBM <: RBM}(rbm::RBM, vis::Mat{Float64}; n_times=1)
 end
 
 
-function free_energy{RBM <: RBM}(rbm::RBM, vis::Mat{Float64})
+function free_energy(rbm::RBM, vis::Mat{Float64})
     vb = sum(vis .* rbm.vbias, 1)
     Wx_b_log = sum(log(1 + exp(rbm.W * vis .+ rbm.hbias)), 1)
     return - vb - Wx_b_log
 end
 
 
-function score_samples{RBM <: RBM}(rbm::RBM, vis::Mat{Float64}; sample_size=10000)
+function score_samples(rbm::RBM, vis::Mat{Float64}; sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
         # so using only little sparse
@@ -135,7 +135,7 @@ function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
 end
 
 
-function fit_batch!{RBM <: RBM}(rbm::RBM, vis::Mat{Float64};
+function fit_batch!(rbm::RBM, vis::Mat{Float64};
                     buf=None, lr=0.1, n_gibbs=1)
     buf = buf == None ? zeros(size(rbm.W)) : buf 
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
@@ -147,8 +147,8 @@ function fit_batch!{RBM <: RBM}(rbm::RBM, vis::Mat{Float64};
 end
 
 
-function fit{RBM <: RBM}(rbm::RBM, X::Mat{Float64};
-              lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
+function fit(rbm::RBM, X::Mat{Float64};
+             lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
     n_batches = int(ceil(n_samples / batch_size))
@@ -168,7 +168,11 @@ function fit{RBM <: RBM}(rbm::RBM, X::Mat{Float64};
 end
 
 
-function transform{RBM <: RBM}(rbm::RBM, X::Mat{Float64})
+function transform(rbm::RBM, X::Mat{Float64})
     return mean_hiddens(rbm, X)
 end
 
+
+function components(rbm::RBM; transpose=true)
+    return if transpose rbm.W' else rbm.W end
+end
