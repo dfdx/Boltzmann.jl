@@ -1,7 +1,13 @@
 
 module Boltzmann
 
-export BernoulliRBM, GRBM, fit, transform, components
+export BernoulliRBM,
+       GRBM,
+       fit,
+       transform,
+       generate
+       components
+       
 
 include("rbm.jl")
 

@@ -173,6 +173,15 @@ function transform(rbm::RBM, X::Mat{Float64})
 end
 
 
+function generate(rbm::RBM, vis::Vec{Float64}; n_gibbs=1)
+    return gibbs(rbm, reshape(vis, length(vis), 1); n_times=n_gibbs)[3]
+end
+
+function generate(rbm::RBM, X::Mat{Float64}; n_gibbs=1)
+    return gibbs(rbm, X; n_times=n_gibbs)[3]
+end
+
+
 function components(rbm::RBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
