@@ -5,7 +5,7 @@ export BernoulliRBM,
        GRBM,
        fit,
        transform,
-       generate
+       generate,
        components
        
 
