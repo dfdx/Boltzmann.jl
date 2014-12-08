@@ -22,7 +22,7 @@ type BernoulliRBM <: RBM
     function Base.show(io::IO, rbm::BernoulliRBM)
         n_vis = size(rbm.vbias, 1)
         n_hid = size(rbm.hbias, 1)
-        print("BernoulliRBM($n_vis, $n_hid)")
+        print(io, "BernoulliRBM($n_vis, $n_hid)")
     end
 end
     
@@ -42,7 +42,7 @@ type GRBM <: RBM
     function Base.show(io::IO, rbm::GRBM)
         n_vis = size(rbm.vbias, 1)
         n_hid = size(rbm.hbias, 1)
-        print("GRBM($n_vis, $n_hid)")
+        print(io, "GRBM($n_vis, $n_hid)")
     end
 end
 
