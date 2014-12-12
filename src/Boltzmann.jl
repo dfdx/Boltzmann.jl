@@ -8,7 +8,6 @@ export BernoulliRBM,
        transform,
        generate,
        components
-       
 
 include("rbm.jl")
 include("dbn.jl")
