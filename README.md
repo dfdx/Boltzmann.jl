@@ -20,3 +20,4 @@ Usage:
 
 Both - dense and sparse matrices are now supported. 
 
+See `examples` directory for more use cases. 

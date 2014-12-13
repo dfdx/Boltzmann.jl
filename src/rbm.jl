@@ -8,15 +8,17 @@ typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
 
 type BernoulliRBM <: RBM
-    W::Mat{Float64}
-    vbias::Vec{Float64}
-    hbias::Vec{Float64}
-    dW_prev::Mat{Float64}
+    W::Matrix{Float64}
+    vbias::Vector{Float64}
+    hbias::Vector{Float64}
+    dW_prev::Matrix{Float64}
+    persistent_chain::Matrix{Float64}
     momentum::Float64
     function BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
         new(rand(Normal(0, sigma), (n_hid, n_vis)),
             zeros(n_vis), zeros(n_hid),
             zeros(n_hid, n_vis),
+            Array(Float64, 0, 0),
             momentum)
     end
     function Base.show(io::IO, rbm::BernoulliRBM)
@@ -25,18 +27,20 @@ type BernoulliRBM <: RBM
         print(io, "BernoulliRBM($n_vis, $n_hid)")
     end
 end
-    
-    
+
+
 type GRBM <: RBM
     W::Mat{Float64}
     vbias::Vec{Float64}
     hbias::Vec{Float64}
     dW_prev::Mat{Float64}
+    persistent_chain::Matrix{Float64}
     momentum::Float64
     function GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
         new(rand(Normal(0, sigma), (n_hid, n_vis)),
             zeros(n_vis), zeros(n_hid),
             zeros(n_hid, n_vis),
+            Array(Float64, 0, 0),
             momentum)
     end
     function Base.show(io::IO, rbm::GRBM)
@@ -105,19 +109,19 @@ end
 function score_samples(rbm::RBM, vis::Mat{Float64}; sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
-        # so using only little sparse
+        # so using only little sample
         cols = sample(1:size(vis, 2), sample_size)
         vis = full(vis[:, cols])
     end
     n_feat, n_samples = size(vis)
     vis_corrupted = copy(vis)
     idxs = rand(1:n_feat, n_samples)
-    for (i, j) in zip(idxs, 1:n_samples)    
+    for (i, j) in zip(idxs, 1:n_samples)
         vis_corrupted[i, j] = 1 - vis_corrupted[i, j]
     end
     fe = free_energy(rbm, vis)
     fe_corrupted = free_energy(rbm, vis_corrupted)
-    return n_feat * log(logistic(fe_corrupted - fe))    
+    return n_feat * log(logistic(fe_corrupted - fe))
 end
 
 
@@ -135,10 +139,32 @@ function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
 end
 
 
-function fit_batch!(rbm::RBM, vis::Mat{Float64};
-                    buf=None, lr=0.1, n_gibbs=1)
-    buf = buf == None ? zeros(size(rbm.W)) : buf 
+function contdiv(rbm::RBM, vis::Mat{Float64}, n_gibbs::Int)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
+    return v_pos, h_pos, v_neg, h_neg
+end
+
+
+function persistent_contdiv(rbm::RBM, vis::Mat{Float64}, n_gibbs::Int)
+    if size(rbm.persistent_chain) != size(vis)
+        # persistent_chain not initialized or batch size changed, re-initialize
+        rbm.persistent_chain = vis
+    end
+    # take positive samples from real data
+    v_pos, h_pos, _, _ = gibbs(rbm, vis)
+    # take negative samples from "fantasy particles"
+    rbm.persistent_chain, _, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
+    return v_pos, h_pos, v_neg, h_neg
+end
+
+
+function fit_batch!(rbm::RBM, vis::Mat{Float64};
+                    persistent=false, buf=None, lr=0.1, n_gibbs=1)
+    # TODO: make persistent=true default when it is tested
+    buf = buf == None ? zeros(size(rbm.W)) : buf
+    # v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
+    sampler = persistent ? persistent_contdiv : contdiv
+    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, n_gibbs)
     lr = lr / size(v_pos, 1)
     update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     rbm.hbias += vec(lr * (sum(h_pos, 2) - sum(h_neg, 2)))
@@ -148,7 +174,7 @@ end
 
 
 function fit(rbm::RBM, X::Mat{Float64};
-             lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
+             persistent=false, lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
     n_batches = int(ceil(n_samples / batch_size))
@@ -159,12 +185,14 @@ function fit(rbm::RBM, X::Mat{Float64};
             # println("fitting $(i)th batch")
             batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
             batch = full(batch)
-            fit_batch!(rbm, batch, buf=w_buf, n_gibbs=n_gibbs)
+            fit_batch!(rbm, batch, persistent=persistent,
+                       buf=w_buf, n_gibbs=n_gibbs)
         end
         toc()
         @printf("Iteration #%s, pseudo-likelihood = %s\n",
                 itr, mean(score_samples(rbm, X)))
     end
+    return rbm
 end
 
 
