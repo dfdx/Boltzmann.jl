@@ -28,7 +28,7 @@ function run_mnist()
     X, y = testdata()  # test data is smaller, no need to downsample
     X = X ./ (maximum(X) - minimum(X))
     m = BernoulliRBM(28*28, 300)
-    fit(m, X, persistent=true)
+    fit(m, X)
     plot_weights(m.W[1:64, :], (28, 28))
     return m
 end

@@ -159,8 +159,7 @@ end
 
 
 function fit_batch!(rbm::RBM, vis::Mat{Float64};
-                    persistent=false, buf=None, lr=0.1, n_gibbs=1)
-    # TODO: make persistent=true default when it is tested
+                    persistent=true, buf=None, lr=0.1, n_gibbs=1)
     buf = buf == None ? zeros(size(rbm.W)) : buf
     # v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     sampler = persistent ? persistent_contdiv : contdiv
@@ -174,7 +173,7 @@ end
 
 
 function fit(rbm::RBM, X::Mat{Float64};
-             persistent=false, lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
+             persistent=true, lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
     n_batches = int(ceil(n_samples / batch_size))
