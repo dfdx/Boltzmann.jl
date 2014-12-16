@@ -1,8 +1,7 @@
-using HDF5, Boltzmann
+using Boltzmann
+using MNIST
 
-f = h5open("/Users/jfsantos/.julia/v0.3/Mocha/examples/mnist/data/train.hdf5")
-data = read(f["data"])
-X = convert(Matrix{Float64}, reshape(squeeze(data, 3), (28*28, 60000)))
+X, y = traindata()
 
 dbn = DBN([784, 100, 100]; vis_type=BernoulliRBM)
 fit(dbn, X)
