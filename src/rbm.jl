@@ -188,8 +188,8 @@ function fit(rbm::RBM, X::Mat{Float64};
                        buf=w_buf, n_gibbs=n_gibbs)
         end
         toc()
-        @printf("Iteration #%s, pseudo-likelihood = %s\n",
-                itr, mean(score_samples(rbm, X)))
+        pseudo_likelihood = mean(score_samples(rbm, X))
+        info("Iteration #$itr, pseudo-likelihood = $pseudo_likelihood")
     end
     return rbm
 end
