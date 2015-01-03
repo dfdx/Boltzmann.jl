@@ -7,7 +7,9 @@ export BernoulliRBM,
        fit,
        transform,
        generate,
-       components
+       components,
+       save_params,
+       load_params
 
 include("core.jl")
 

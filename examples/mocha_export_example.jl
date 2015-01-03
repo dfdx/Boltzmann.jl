@@ -1,6 +1,7 @@
 
-
+using Boltzmann
 using Mocha
+using HDF5
 
 const DBN_PATH = "/tmp/dbn_params.hdf5"
 
