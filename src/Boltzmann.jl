@@ -9,7 +9,6 @@ export BernoulliRBM,
        generate,
        components
 
-include("rbm.jl")
-include("dbn.jl")
+include("core.jl")
 
 end
