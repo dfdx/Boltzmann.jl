@@ -2,6 +2,8 @@
 Restricted Bolzmann Machines in Julia
 =====================================
 
+[![Build Status](https://travis-ci.org/dfdx/Boltzmann.jl.svg)](https://travis-ci.org/dfdx/Boltzmann.jl)
+
 This package provides implementation of 2 most commonly used types of Restricted Bolzmann Machines, namely: 
 
 - **BernoulliRBM**: RBM with binary visible and hidden units
