@@ -209,7 +209,8 @@ function generate(rbm::RBM, X::Mat{Float64}; n_gibbs=1)
 end
 
 
-function components(rbm::RBM; transpose=true)
+function features(rbm::RBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
-
+# synonym for backward compatibility
+components(rbm::RBM; transpose=true) = features(rbm, transpose)
