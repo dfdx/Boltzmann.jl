@@ -23,9 +23,11 @@ Traint RBM:
 
     using Boltzmann
 
-    X = randn(100, 2000)    # 2000 observations (examples) with 100 variables (features) each
+    X = randn(100, 2000)    # 2000 observations (examples) 
+                            #  with 100 variables (features) each
     X = (X + abs(minimum(X))) / (maximum(X) - minimum(X)) # scale X to [0..1]
-    rbm = GRBM(100, 50)     # define Gaussian RBM with 100 visible (input) and 50 hidden (output) variables
+    rbm = GRBM(100, 50)     # define Gaussian RBM with 100 visible (input) 
+                            #  and 50 hidden (output) variables
     fit(rbm, X)             # fit model to data 
 
 (for more meaningful dataset see [MNIST Example](https://github.com/dfdx/Boltzmann.jl/blob/master/examples/mnistexample.jl))
