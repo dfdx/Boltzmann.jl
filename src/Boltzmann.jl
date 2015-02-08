@@ -8,6 +8,7 @@ export BernoulliRBM,
        transform,
        generate,
        components,
+       features,
        save_params,
        load_params
 
