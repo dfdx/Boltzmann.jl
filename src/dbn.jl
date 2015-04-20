@@ -1,6 +1,8 @@
 
+using Compat
+
 immutable DBN
-    layers::Vector{(String, RBM)}
+    layers::Vector{@compat(Tuple{String, RBM})}
 end
 
 
