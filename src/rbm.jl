@@ -1,6 +1,7 @@
 
 using Distributions
 using Base.LinAlg.BLAS
+import StatsBase.fit
 
 abstract RBM
 
