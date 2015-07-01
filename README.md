@@ -19,7 +19,7 @@ installing latest development version:
 RBM Basic Usage
 ---------------
 
-Traint RBM:
+Train RBM:
 
     using Boltzmann
 
@@ -45,7 +45,7 @@ or **generate** vectors similar to given ones (e.g. for recommendation, see exam
     x = ... 
     x_new = generate(rbm, x)
 
-RBMs can handle both - dense and sparse arrays. It cannot, however, handle DataArrays because it's up to application how to treat missing value.
+RBMs can handle both - dense and sparse arrays. It cannot, however, handle DataArrays because it's up to application how to treat missing values.
 
 
 RBM Kinds
@@ -56,7 +56,7 @@ This package provides implementation of the 2 most popular kinds of restricted B
  - `BernoulliRBM`: RBM with binary visible and hidden units
  - `GRBM`: RBM with Gaussian visible and binary hidden units
 
-Bernoulli RBM is classic one and works great for modeling binary (e.g. like/dislike) and nearly binary (e.g. logsitic-based) data. Gaussian RBM works better when visible variables approximately follow normal distribution, which is often the case e.g. for image data. 
+Bernoulli RBM is classic one and works great for modeling binary (e.g. like/dislike) and nearly binary (e.g. logistic-based) data. Gaussian RBM works better when visible variables approximately follow normal distribution, which is often the case e.g. for image data. 
 
 
 Deep Belief Networks
@@ -82,7 +82,7 @@ DBNs are created as a stack of named RBMs. Below is an example of training DBN f
 Integration with Mocha
 ----------------------
 
-[Mocha.jl](https://github.com/pluskid/Mocha.jl) is an excellent deep learning framework implementing auto-encoders and a number of fine-tuing algorithms. Boltzmann.jl allows to save pretrained model in a Mocha-compatible file format to be used later on for supervised learning. Below is a snippet of essential API, while complete code is available in [Mocha Export Example](https://github.com/dfdx/Boltzmann.jl/blob/master/examples/mocha_export_example.jl):
+[Mocha.jl](https://github.com/pluskid/Mocha.jl) is an excellent deep learning framework implementing auto-encoders and a number of fine-tuning algorithms. Boltzmann.jl allows to save pretrained model in a Mocha-compatible file format to be used later on for supervised learning. Below is a snippet of the essential API, while complete code is available in [Mocha Export Example](https://github.com/dfdx/Boltzmann.jl/blob/master/examples/mocha_export_example.jl):
 
     # pretraining and exporting in Boltzmann.jl
     dbn_layers = [("vis", GRBM(100, 50)),
