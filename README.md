@@ -79,6 +79,20 @@ DBNs are created as a stack of named RBMs. Below is an example of training DBN f
     transform(dbn, X)
 
 
+Deep Autoencoders
+-----------------
+
+Once built, DBN can be converted into a deep autoencoder. Continuing previous example:
+
+    dae = unroll(dbn)
+
+DAEs cannot be trained directly, but can be used to transform input data:
+
+    transform(dae, X)
+
+In this case output will have the same dimensionality as input, but with a noise removed.
+
+
 Integration with Mocha
 ----------------------
 

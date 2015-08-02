@@ -1,4 +1,4 @@
 
 include("rbm.jl")
-include("dbn.jl")
+include("nets.jl")
 include("io.jl")

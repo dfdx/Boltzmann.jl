@@ -12,3 +12,5 @@ dbn = DBN(layers)
 fit(dbn, X)
 transform(dbn, X)
 
+dae = unroll(dbn)
+transform(dae, X)
