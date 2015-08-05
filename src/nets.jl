@@ -89,7 +89,7 @@ function unroll(dbn::DBN)
     layernames[1:n] = dbn.layernames
     for i=1:n
         layers[n+i] = invert(dbn[n-i+1])
-        layernames[n+i] = getname(dbn, n-1+1) * "_inv"
+        layernames[n+i] = getname(dbn, n-i+1) * "_inv"
     end
     return DAE(layers, layernames)
 end

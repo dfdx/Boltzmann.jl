@@ -14,3 +14,8 @@ transform(dbn, X)
 
 dae = unroll(dbn)
 transform(dae, X)
+
+save_params("test.hdf5", dbn)
+save_params("test2.hdf5", dae)
+rm("test.hdf5")
+rm("test2.hdf5")
