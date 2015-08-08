@@ -14,23 +14,23 @@ function load_params(file::HDF5File, rbm::RBM, name::String)
     rbm.hbias = read(file, "$(name)___bias")
 end
 
-function save_params(file::HDF5File, dbn::DBN)
-    for i=1:length(dbn)
-        save_params(file, dbn[i], getname(dbn, i))
+function save_params(file::HDF5File, net::Net)
+    for i=1:length(net)
+        save_params(file, net[i], getname(net, i))
     end
 end
-save_params(path::String, dbn::DBN) = h5open(path, "w") do h5
-    save_params(h5, dbn)
+save_params(path::String, net::Net) = h5open(path, "w") do h5
+    save_params(h5, net)
 end
 
 
-function load_params(file, dbn::DBN)
-    for i=1:length(dbn)
-        load_params(file, dbn[i], getname(dbn, i))
+function load_params(file, net::Net)
+    for i=1:length(net)
+        load_params(file, net[i], getname(net, i))
     end
 end
-load_params(path::String, dbn::DBN) = h5open(path) do h5
-    load_params(h5, dbn)
+load_params(path::String, net::Net) = h5open(path) do h5
+    load_params(h5, net)
 end
 
 

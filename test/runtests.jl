@@ -1,3 +1,3 @@
 
 include("testrbm.jl")
-include("testdbn.jl")
+include("testnets.jl")
