@@ -78,7 +78,7 @@ end
 
 function sample_visibles(rbm::GRBM, hid::Mat{Float64})
     mu = logistic(rbm.W' * hid .+ rbm.vbias)
-    sigma2 = 0.01                   # using fixed standard diviation
+    sigma2 = 1                   # using fixed standard diviation
     samples = zeros(size(mu))
     for j=1:size(mu, 2), i=1:size(mu, 1)
         samples[i, j] = rand(Normal(mu[i, j], sigma2))

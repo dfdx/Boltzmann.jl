@@ -37,3 +37,4 @@ run_mnist()
 
 println("Press RETURN when ready")
 readline(STDIN)
+
