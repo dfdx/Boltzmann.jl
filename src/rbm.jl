@@ -3,53 +3,67 @@ using Distributions
 using Base.LinAlg.BLAS
 import StatsBase.fit
 
-abstract RBM
-
 typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
 
-type BernoulliRBM <: RBM
+abstract Distrib
+abstract Bernoulli <: Distrib
+abstract Gaussian <: Distrib
+
+abstract AbstractRBM
+
+@runonce type RBM{V,H} <: AbstractRBM
     W::Matrix{Float64}
     vbias::Vector{Float64}
     hbias::Vector{Float64}
     dW_prev::Matrix{Float64}
     persistent_chain::Matrix{Float64}
-    momentum::Float64
-    function BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
-        new(rand(Normal(0, sigma), (n_hid, n_vis)),
-            zeros(n_vis), zeros(n_hid),
-            zeros(n_hid, n_vis),
-            Array(Float64, 0, 0),
-            momentum)
-    end
-    function Base.show(io::IO, rbm::BernoulliRBM)
-        n_vis = size(rbm.vbias, 1)
-        n_hid = size(rbm.hbias, 1)
-        print(io, "BernoulliRBM($n_vis, $n_hid)")
-    end
+    momentum::Float64    
+end
+
+function RBM(V::Type, H::Type,
+             n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
+    RBM{V,H}(rand(Normal(0, sigma), (n_hid, n_vis)),
+        zeros(n_vis), zeros(n_hid),
+        zeros(n_hid, n_vis),
+        Array(Float64, 0, 0),
+        momentum)
+end
+
+RBM{V,H}(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9) =
+    RBM(V, H, n_vis, n_hid, sigma=sigma, momentum=momentum)
+
+function Base.show{V,H}(io::IO, rbm::RBM{V,H})
+    n_vis = size(rbm.vbias, 1)
+    n_hid = size(rbm.hbias, 1)
+    print(io, "RBM{$V,$H}($n_vis, $n_hid)")
 end
 
 
-type GRBM <: RBM
-    W::Mat{Float64}
-    vbias::Vec{Float64}
-    hbias::Vec{Float64}
-    dW_prev::Mat{Float64}
-    persistent_chain::Matrix{Float64}
-    momentum::Float64
-    function GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
-        new(rand(Normal(0, sigma), (n_hid, n_vis)),
-            zeros(n_vis), zeros(n_hid),
-            zeros(n_hid, n_vis),
-            Array(Float64, 0, 0),
-            momentum)
-    end
-    function Base.show(io::IO, rbm::GRBM)
-        n_vis = size(rbm.vbias, 1)
-        n_hid = size(rbm.hbias, 1)
-        print(io, "GRBM($n_vis, $n_hid)")
-    end
-end
+typealias BernoulliRBM RBM{Bernoulli, Bernoulli}
+typealias GRBM RBM{Gaussian, Bernoulli}
+
+
+## type GRBM <: RBM
+##     W::Mat{Float64}
+##     vbias::Vec{Float64}
+##     hbias::Vec{Float64}
+##     dW_prev::Mat{Float64}
+##     persistent_chain::Matrix{Float64}
+##     momentum::Float64
+##     function GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
+##         new(rand(Normal(0, sigma), (n_hid, n_vis)),
+##             zeros(n_vis), zeros(n_hid),
+##             zeros(n_hid, n_vis),
+##             Array(Float64, 0, 0),
+##             momentum)
+##     end
+##     function Base.show(io::IO, rbm::GRBM)
+##         n_vis = size(rbm.vbias, 1)
+##         n_hid = size(rbm.hbias, 1)
+##         print(io, "GRBM($n_vis, $n_hid)")
+##     end
+## end
 
 
 function logistic(x)
