@@ -40,9 +40,9 @@ Base.endof(net::Net) = length(net)
 
 function mh_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
     hiddens = Array(Array{Float64, 2}, layer)
-    hiddens[1] = mean_hiddens(net[1], batch)
+    hiddens[1] = hid_means(net[1], batch)
     for k=2:layer
-        hiddens[k] = mean_hiddens(net[k], hiddens[k-1])
+        hiddens[k] = hid_means(net[k], hiddens[k-1])
     end
     hiddens[end]
 end

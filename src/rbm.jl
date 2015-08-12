@@ -6,9 +6,7 @@ import StatsBase.fit
 typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
 
-abstract Distrib
-abstract Bernoulli <: Distrib
-abstract Gaussian <: Distrib
+typealias Gaussian Normal
 
 abstract AbstractRBM
 
@@ -18,7 +16,7 @@ abstract AbstractRBM
     hbias::Vector{Float64}
     dW_prev::Matrix{Float64}
     persistent_chain::Matrix{Float64}
-    momentum::Float64    
+    momentum::Float64
 end
 
 function RBM(V::Type, H::Type,
@@ -30,8 +28,6 @@ function RBM(V::Type, H::Type,
         momentum)
 end
 
-RBM{V,H}(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9) =
-    RBM(V, H, n_vis, n_hid, sigma=sigma, momentum=momentum)
 
 function Base.show{V,H}(io::IO, rbm::RBM{V,H})
     n_vis = size(rbm.vbias, 1)
@@ -41,29 +37,11 @@ end
 
 
 typealias BernoulliRBM RBM{Bernoulli, Bernoulli}
+BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9) =
+    RBM(Bernoulli, Bernoulli, n_vis, n_hid, sigma=sigma, momentum=momentum)
 typealias GRBM RBM{Gaussian, Bernoulli}
-
-
-## type GRBM <: RBM
-##     W::Mat{Float64}
-##     vbias::Vec{Float64}
-##     hbias::Vec{Float64}
-##     dW_prev::Mat{Float64}
-##     persistent_chain::Matrix{Float64}
-##     momentum::Float64
-##     function GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
-##         new(rand(Normal(0, sigma), (n_hid, n_vis)),
-##             zeros(n_vis), zeros(n_hid),
-##             zeros(n_hid, n_vis),
-##             Array(Float64, 0, 0),
-##             momentum)
-##     end
-##     function Base.show(io::IO, rbm::GRBM)
-##         n_vis = size(rbm.vbias, 1)
-##         n_hid = size(rbm.hbias, 1)
-##         print(io, "GRBM($n_vis, $n_hid)")
-##     end
-## end
+GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9) =
+    RBM(Gaussian, Bernoulli, n_vis, n_hid, sigma=sigma, momentum=momentum)
 
 
 function logistic(x)
@@ -71,33 +49,42 @@ function logistic(x)
 end
 
 
-function mean_hiddens(rbm::RBM, vis::Mat{Float64})
+function hid_means(rbm::RBM, vis::Mat{Float64})
     p = rbm.W * vis .+ rbm.hbias
     return logistic(p)
 end
 
 
-function sample_hiddens(rbm::RBM, vis::Mat{Float64})
-    p = mean_hiddens(rbm, vis)
-    return float(rand(size(p)) .< p)
-end
-
-
-function sample_visibles(rbm::BernoulliRBM, hid::Mat{Float64})
+function vis_means(rbm::RBM, hid::Mat{Float64})
     p = rbm.W' * hid .+ rbm.vbias
-    p = logistic(p)
-    return float(rand(size(p)) .< p)
+    return logistic(p)
 end
 
 
-function sample_visibles(rbm::GRBM, hid::Mat{Float64})
-    mu = logistic(rbm.W' * hid .+ rbm.vbias)
+function sample(::Type{Bernoulli}, means::Mat{Float64})
+    return float(rand(size(means)) .< means)
+end
+
+
+function sample(::Type{Gaussian}, means::Mat{Float64})
     sigma2 = 1                   # using fixed standard diviation
-    samples = zeros(size(mu))
-    for j=1:size(mu, 2), i=1:size(mu, 1)
-        samples[i, j] = rand(Normal(mu[i, j], sigma2))
+    samples = zeros(size(means))
+    for j=1:size(means, 2), i=1:size(means, 1)
+        samples[i, j] = rand(Normal(means[i, j], sigma2))
     end
     return samples
+end
+
+    
+function sample_hiddens{V,H}(rbm::RBM{V, H}, vis::Mat{Float64})
+    means = hid_means(rbm, vis)
+    return sample(H, means)
+end
+
+
+function sample_visibles{V,H}(rbm::RBM{V,H}, hid::Mat{Float64})
+    means = vis_means(rbm, hid)
+    return sample(V, means)
 end
 
 
@@ -211,7 +198,7 @@ end
 
 
 function transform(rbm::RBM, X::Mat{Float64})
-    return mean_hiddens(rbm, X)
+    return hid_means(rbm, X)
 end
 
 
@@ -229,3 +216,4 @@ function components(rbm::RBM; transpose=true)
 end
 # synonym
 features(rbm::RBM; transpose=true) = components(rbm, transpose)
+

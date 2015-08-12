@@ -1,7 +1,8 @@
 
 module Boltzmann
 
-export BernoulliRBM,
+export RBM,
+       BernoulliRBM,
        GRBM,
        DBN,
        DAE,

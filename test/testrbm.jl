@@ -1,8 +1,9 @@
 
 using Boltzmann
+using Distributions
 using Base.Test
 
-X = rand(1000, 2000)
+X = rand(1000, 200)
 
 
 function brbm_smoke_test()
@@ -15,6 +16,11 @@ function grbm_smoke_test()
     fit(model, X)
 end
 
+function conf_smoke_test()
+    model = RBM(Normal, Normal, 1000, 500)
+    fit(model, X)
+end
 
 brbm_smoke_test()
 grbm_smoke_test()
+conf_smoke_test()
