@@ -1,6 +1,8 @@
 
 using Distributions
 using Base.LinAlg.BLAS
+using Compat
+import Base.getindex
 import StatsBase.fit
 
 typealias Mat{T} AbstractArray{T, 2}
@@ -178,7 +180,7 @@ function fit(rbm::RBM, X::Mat{Float64};
              persistent=true, lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
-    n_batches = int(ceil(n_samples / batch_size))
+    n_batches = @compat Int(ceil(n_samples / batch_size))
     w_buf = zeros(size(rbm.W))
     for itr=1:n_iter
         tic()
