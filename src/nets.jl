@@ -8,8 +8,9 @@ immutable DBN <: Net
     layernames::Vector{String}
 end
 
-DBN(namedlayers::Vector{@compat(Tuple{ASCIIString, RBM})}) =
+DBN{T<:@compat(Tuple{String,RBM})}(namedlayers::Vector{T}) =
     DBN(map(p -> p[2], namedlayers), map(p -> p[1], namedlayers))
+    
 
 immutable DAE <: Net
     layers::Vector{RBM}
