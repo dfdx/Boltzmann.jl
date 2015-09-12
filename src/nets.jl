@@ -58,7 +58,7 @@ function fit(dbn::DBN, X::Mat{Float64};
              lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X,2)
-    n_batches = int(ceil(n_samples / batch_size))
+    n_batches = round(Int, ceil(n_samples / batch_size))
     for k = 1:length(dbn.layers)
         w_buf = zeros(size(dbn[k].W))
         for itr=1:n_iter
