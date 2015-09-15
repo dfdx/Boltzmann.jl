@@ -168,6 +168,7 @@ function fit_batch!(rbm::RBM, vis::Mat{Float64};
     # v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     sampler = persistent ? persistent_contdiv : contdiv
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, n_gibbs)
+    lr=lr/size(v_pos,2)
     update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     rbm.hbias += vec(lr * (sum(h_pos, 2) - sum(h_neg, 2)))
     rbm.vbias += vec(lr * (sum(v_pos, 2) - sum(v_neg, 2)))
