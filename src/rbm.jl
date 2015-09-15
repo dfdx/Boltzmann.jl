@@ -137,7 +137,7 @@ function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     # rbm.W += lr * dW
     axpy!(lr, dW, rbm.W)
     # rbm.W += rbm.momentum * rbm.dW_prev
-    axpy!(lr * rbm.momentum, rbm.dW_prev, rbm.W)
+    axpy!(rbm.momentum, rbm.dW_prev, rbm.W)
     # save current dW
     copy!(rbm.dW_prev, dW)
 end
