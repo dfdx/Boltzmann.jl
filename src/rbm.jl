@@ -132,12 +132,12 @@ end
 function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
     dW = buf
     # dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
-    gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
+    gemm!('N', 'T', lr, h_neg, v_neg, 0.0, dW)
+    gemm!('N', 'T', lr, h_pos, v_pos, -1.0, dW)
+    # rbm.dW += rbm.momentum * rbm.dW_prev
+    axpy!(rbm.momentum, rbm.dW_prev, dW)
     # rbm.W += lr * dW
-    axpy!(lr, dW, rbm.W)
-    # rbm.W += rbm.momentum * rbm.dW_prev
-    axpy!(rbm.momentum, rbm.dW_prev, rbm.W)
+    axpy!(1.0, dW, rbm.W)
     # save current dW
     copy!(rbm.dW_prev, dW)
 end
