@@ -1,7 +1,7 @@
 
 
 if !isdefined(:__EXPRESSION_HASHES__)
-    __EXPRESSION_HASHES__ = Set{Uint64}()
+    __EXPRESSION_HASHES__ = Set{UInt64}()
 end
 
 macro runonce(expr)

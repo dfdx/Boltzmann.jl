@@ -5,16 +5,16 @@ abstract Net
 
 immutable DBN <: Net
     layers::Vector{RBM}
-    layernames::Vector{String}
+    layernames::Vector{AbstractString}
 end
 
-DBN{T<:@compat(Tuple{String,RBM})}(namedlayers::Vector{T}) =
+DBN{T<:@compat(Tuple{AbstractString,RBM})}(namedlayers::Vector{T}) =
     DBN(map(p -> p[2], namedlayers), map(p -> p[1], namedlayers))
     
 
 immutable DAE <: Net
     layers::Vector{RBM}
-    layernames::Vector{String}
+    layernames::Vector{AbstractString}
 end
 
 
@@ -27,14 +27,14 @@ end
 # DBN fields may change in the future, so it's worth to work through accessors
 getname(net::Net, k::Int) = net.layernames[k]
 getmodel(net::Net, k::Int) = net.layers[k]
-function getmodel(net::Net, name::String)
+function getmodel(net::Net, name::AbstractString)
     k = findfirst(lname -> lname == name, net.layernames)
     return (k != 0) ? net.layers[k] : error("No layer named '$name'")
 end
 
 # short syntax for accessing stored RBMs
 getindex(net::Net, k::Int) = getmodel(net, k)
-getindex(net::Net, name::String) = getmodel(net, name)
+getindex(net::Net, name::AbstractString) = getmodel(net, name)
 Base.length(net::Net) = length(net.layers)
 Base.endof(net::Net) = length(net)
 
