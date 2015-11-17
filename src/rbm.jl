@@ -114,7 +114,7 @@ function score_samples(rbm::RBM, vis::Mat{Float64}; sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
         # so using only little sample
-        cols = sample(1:size(vis, 2), sample_size)
+        cols = rand(1:size(vis, 2), sample_size)
         vis = full(vis[:, cols])
     end
     n_feat, n_samples = size(vis)
