@@ -5,6 +5,8 @@ Links:
     Thesis - http://www.cs.nyu.edu/~gwtaylor/thesis/Taylor_Graham_W_200911_PhD_thesis.pdf
     FCRBM - http://www.cs.toronto.edu/~fritz/absps/fcrbm_icml.pdf
 =#
+import StatsBase: predict
+
 
 @runonce type ConditionalRBM{V,H} <: AbstractRBM{V,H}
     W::Matrix{Float64}  # standard weights
@@ -155,14 +157,33 @@ function transform(crbm::ConditionalRBM, X::Mat{Float64})
 end
 
 
-function generate(crbm::ConditionalRBM, vis::Vec{Float64}; n_gibbs=1)
-    curr, hist = split_vis(crbm, reshape(vis, length(vis), 1))
-    dynamic_biases!(crbm, hist)
-    return gibbs(crbm, curr; n_times=n_gibbs)[3]
-end
-
 function generate(crbm::ConditionalRBM, X::Mat{Float64}; n_gibbs=1)
     curr, hist = split_vis(crbm, X)
     dynamic_biases!(crbm, hist)
     return gibbs(crbm, curr; n_times=n_gibbs)[3]
 end
+
+generate(crbm::ConditionalRBM, vis::Vec{Float64}; n_gibbs=1) = generate(
+    crbm, reshape(vis, length(vis), 1); n_gibbs=n_gibbs
+)
+
+function predict(crbm::ConditionalRBM, history::Mat{Float64}; n_gibbs=1)
+    @assert size(history, 1) == size(crbm.A, 2)
+
+    curr = sub(history, 1:length(crbm.vbias), :)
+    vis = vcat(curr, history)
+
+    return generate(crbm, vis; n_gibbs=n_gibbs)
+end
+
+predict(crbm::ConditionalRBM, history::Vec{Float64}; n_gibbs=1) = predict(
+    crbm, reshape(history, length(history), 1); n_gibbs=n_gibbs
+)
+
+predict(crbm::ConditionalRBM, vis::Mat{Float64}, hist::Mat{Float64}; n_gibbs=1) = generate(
+    crbm, vcat(vis, hist); n_gibbs=n_gibbs
+)
+
+predict(crbm::ConditionalRBM, vis::Vec{Float64}, hist::Vec{Float64}; n_gibbs=1) = predict(
+    crbm, reshape(vis, length(vis), 1), reshape(hist, length(hist), 1); n_gibbs=n_gibbs
+)
