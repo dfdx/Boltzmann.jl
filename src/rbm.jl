@@ -10,9 +10,9 @@ typealias Vec{T} AbstractArray{T, 1}
 
 typealias Gaussian Normal
 
-abstract AbstractRBM
+abstract AbstractRBM{V,H}
 
-@runonce type RBM{V,H} <: AbstractRBM
+@runonce type RBM{V,H} <: AbstractRBM{V,H}
     W::Matrix{Float64}
     vbias::Vector{Float64}
     hbias::Vector{Float64}
@@ -20,6 +20,7 @@ abstract AbstractRBM
     persistent_chain::Matrix{Float64}
     momentum::Float64
 end
+
 
 function RBM(V::Type, H::Type,
              n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
@@ -77,20 +78,20 @@ function sample(::Type{Gaussian}, means::Mat{Float64})
     return samples
 end
 
-    
-function sample_hiddens{V,H}(rbm::RBM{V, H}, vis::Mat{Float64})
+
+function sample_hiddens{V,H}(rbm::AbstractRBM{V, H}, vis::Mat{Float64})
     means = hid_means(rbm, vis)
     return sample(H, means)
 end
 
 
-function sample_visibles{V,H}(rbm::RBM{V,H}, hid::Mat{Float64})
+function sample_visibles{V,H}(rbm::AbstractRBM{V,H}, hid::Mat{Float64})
     means = vis_means(rbm, hid)
     return sample(V, means)
 end
 
 
-function gibbs(rbm::RBM, vis::Mat{Float64}; n_times=1)
+function gibbs(rbm::AbstractRBM, vis::Mat{Float64}; n_times=1)
     v_pos = vis
     h_pos = sample_hiddens(rbm, v_pos)
     v_neg = sample_visibles(rbm, h_pos)
@@ -110,7 +111,7 @@ function free_energy(rbm::RBM, vis::Mat{Float64})
 end
 
 
-function score_samples(rbm::RBM, vis::Mat{Float64}; sample_size=10000)
+function score_samples(rbm::AbstractRBM, vis::Mat{Float64}; sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
         # so using only little sample
@@ -143,13 +144,13 @@ function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
 end
 
 
-function contdiv(rbm::RBM, vis::Mat{Float64}, n_gibbs::Int)
+function contdiv(rbm::AbstractRBM, vis::Mat{Float64}, n_gibbs::Int)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
 
-function persistent_contdiv(rbm::RBM, vis::Mat{Float64}, n_gibbs::Int)
+function persistent_contdiv(rbm::AbstractRBM, vis::Mat{Float64}, n_gibbs::Int)
     if size(rbm.persistent_chain) != size(vis)
         # persistent_chain not initialized or batch size changed, re-initialize
         rbm.persistent_chain = vis
@@ -213,9 +214,9 @@ function generate(rbm::RBM, X::Mat{Float64}; n_gibbs=1)
 end
 
 
-function components(rbm::RBM; transpose=true)
+function components(rbm::AbstractRBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
 # synonym
-features(rbm::RBM; transpose=true) = components(rbm, transpose)
+features(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 
