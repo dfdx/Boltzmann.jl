@@ -20,10 +20,14 @@ import StatsBase: predict
     dW_prev::Matrix{Float64}
     persistent_chain::Matrix{Float64}
     momentum::Float64
+    decay_rate::Float64
+    sparsity_cost::Float64
+    sparsity_exp::Float64
 end
 
 function ConditionalRBM(V::Type, H::Type, n_vis::Int, n_hid::Int;
-        sigma=0.001, momentum=0.9, steps=5)
+        sigma=0.001, momentum=0.9, decay_rate=0.0, sparsity_cost=0.0,
+        sparsity_exp=0.5, steps=5)
 
     ConditionalRBM{V,H}(
         rand(Normal(0, sigma), (n_hid, n_vis)),
@@ -37,6 +41,9 @@ function ConditionalRBM(V::Type, H::Type, n_vis::Int, n_hid::Int;
         zeros(n_hid, n_vis),
         Array(Float64, 0, 0),
         momentum,
+        decay_rate,
+        sparsity_cost,
+        sparsity_exp
     )
 end
 
@@ -76,11 +83,38 @@ function update_weights!(crbm::ConditionalRBM, h_pos, v_pos, h_neg, v_neg, hist,
     # Normal W weight update
     dW = buf[1]
 
+    # Scale costs
+    dr = crbm.decay_rate/size(v_pos,2)
+    cost = crbm.sparsity_cost/size(v_pos,2)
+    mean_hid = mean(h_pos)
+
+    # The sparsity constraint should only drive the weights
+    # down when the mean activation of hidden units is higher
+    # than the expected (hence why it isn't squared or the abs())
+    sparsity_penalty = cost * (mean_hid - crbm.sparsity_exp)
+
+    # The decay penalty should drive all weights toward
+    # zero by some small amount on each update.
+    # For the conditional case each set of weights
+    # should decay.
+    decay_penalty = dr * crbm.W
+
     # dW = (h_pos * v_pos') - (h_neg * v_neg')
     gemm!('N', 'T', lr, h_neg, v_neg, 0.0, dW)
     gemm!('N', 'T', lr, h_pos, v_pos, -1.0, dW)
     # crbm.dW += crbm.momentum * crbm.dW_prev
     axpy!(crbm.momentum, crbm.dW_prev, dW)
+
+    # Apply our penalties to dW.
+    # There is probably a more efficient way to do
+    # this with BLAS, but I'm very familiar with it.
+    dW -= (decay_penalty - sparsity_penalty)
+
+    # We also need to apply the sparsity penalty to the hidden bias.
+    # Not the best place to do this, but we're already calculating
+    # the penalty here.
+    crbm.hbias -= sparsity_penalty
+
     # rbm.W += lr * dW
     axpy!(1.0, dW, crbm.W)
     # save current dW
@@ -89,18 +123,30 @@ function update_weights!(crbm::ConditionalRBM, h_pos, v_pos, h_neg, v_neg, hist,
     # Update A (history -> vis) weights
     dA = buf[2]
 
+    decay_penalty = dr * crbm.A
+
     # dW = (v_pos * hist') - (v_neg * hist')
     gemm!('N', 'T', lr, v_neg, hist, 0.0, dA)
     gemm!('N', 'T', lr, v_pos, hist, -1.0, dA)
+
+    dA -= decay_penalty
+
     # rbm.A += lr * dW
     axpy!(1.0, dA, crbm.A)
 
     # Update B (history -> hid) weights
     dB = buf[3]
 
+    decay_penalty = dr * crbm.B
+
     # dW = (h_pos * hist') - (h_neg * hist')
     gemm!('N', 'T', lr, h_neg, hist, 0.0, dB)
     gemm!('N', 'T', lr, h_pos, hist, -1.0, dB)
+
+    # We also apply the sparsity_penalty to the conditional weights
+    # onto the hidden units.
+    dB -= (decay_penalty - sparsity_penalty)
+
     # rbm.B += lr * dW
     axpy!(1.0, dB, crbm.B)
 end
