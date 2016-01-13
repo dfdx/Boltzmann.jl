@@ -17,18 +17,16 @@ abstract AbstractRBM{V,H}
     vbias::Vector{Float64}
     hbias::Vector{Float64}
     dW_prev::Matrix{Float64}
-    persistent_chain::Matrix{Float64}
-    momentum::Float64
+    # persistent_chain::Matrix{Float64}
+    # momentum::Float64
 end
 
 
 function RBM(V::Type, H::Type,
-             n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9)
+             n_vis::Int, n_hid::Int; sigma=0.01)
     RBM{V,H}(rand(Normal(0, sigma), (n_hid, n_vis)),
         zeros(n_vis), zeros(n_hid),
-        zeros(n_hid, n_vis),
-        Array(Float64, 0, 0),
-        momentum)
+        zeros(n_hid, n_vis))
 end
 
 
@@ -43,7 +41,7 @@ typealias BernoulliRBM RBM{Bernoulli, Bernoulli}
 BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9) =
     RBM(Bernoulli, Bernoulli, n_vis, n_hid, sigma=sigma, momentum=momentum)
 typealias GRBM RBM{Gaussian, Bernoulli}
-GRBM(n_vis::Int, n_hid::Int; sigma=0.001, momentum=0.9) =
+GRBM(n_vis::Int, n_hid::Int; sigma=0.01, momentum=0.9) =
     RBM(Gaussian, Bernoulli, n_vis, n_hid, sigma=sigma, momentum=momentum)
 
 
