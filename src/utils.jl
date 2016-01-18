@@ -14,3 +14,25 @@ macro runonce(expr)
     end)
 end
 
+
+"""Same as `get` function, but evaluates default_expr only if needed"""
+macro get(dict, key, default_expr)
+    return quote
+        if haskey($dict, $key)
+            return $dict[$key]
+        else
+            return $default_expr
+        end
+    end
+end
+
+
+"""Same as `get` function, but evaluates default_expr only if needed"""
+macro get_or_create(dict, key, default_expr)
+    return quote
+        if !haskey($dict, $key)
+            $dict[$key] = $default_expr
+        end
+        $dict[$key]
+    end
+end

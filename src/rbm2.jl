@@ -7,22 +7,32 @@ import StatsBase.fit
 
 typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
+typealias Gaussian Normal
 
+"""
+Pseudo distribution that returns mean as is during sampling, i.e.
+
+sample(MeanDistr, means) = means
+"""
+type MeanDistr <: Distribution{Distributions.Univariate,
+                               Distributions.Discrete}
+end
+
+
+## types
 
 abstract AbstractRBM
 
 @runonce type RBM{V,H} <: AbstractRBM
-    W::Matrix{Float64}        # matrix of weights between vis and hid vars
-    vbias::Vector{Float64}    # biases for visible variables
-    hbias::Vector{Float64}    # biases for hidden variables
-    cache::Dict{Symbol, Any}  # cache for objects used during fitting
-                              #  (e.g. previous weights)
+    W::Matrix{Float64}         # matrix of weights between vis and hid vars
+    vbias::Vector{Float64}     # biases for visible variables
+    hbias::Vector{Float64}     # biases for hidden variables
 end
 
 function RBM(V::Type, H::Type,
              n_vis::Int, n_hid::Int; sigma=0.01)
     RBM{V,H}(rand(Normal(0, sigma), (n_hid, n_vis)),
-        zeros(n_vis), zeros(n_hid))
+             zeros(n_vis), zeros(n_hid))
 end
 
 function Base.show{V,H}(io::IO, rbm::RBM{V,H})
@@ -52,16 +62,16 @@ end
 
 ## samping
 
-function sample(::Type{:mean}, means::Mat{Float64})
+function sample(::Type{MeanDistr}, means::Mat{Float64})
     return means
 end
 
-function sample(::Type{:bernoulli}, means::Mat{Float64})
+function sample(::Type{Bernoulli}, means::Mat{Float64})
     return float(rand(size(means)) .< means)
 end
 
 
-function sample(::Type{:gaussian}, means::Mat{Float64})
+function sample(::Type{Gaussian}, means::Mat{Float64})
     sigma2 = 1                   # using fixed standard diviation
     samples = zeros(size(means))
     for j=1:size(means, 2), i=1:size(means, 1)
@@ -126,30 +136,35 @@ end
 
 ## gradient calculation
 
-function contdiv(rbm::AbstractRBM, vis::Mat{Float64}, n_gibbs::Int)
+function contdiv(rbm::RBM, vis::Mat{Float64}, config::Dict{Symbol,Any})
+    n_gibbs::Int = @get_or_create(config, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
 
-function persistent_contdiv(rbm::AbstractRBM, vis::Mat{Float64}, n_gibbs::Int)
-    if size(rbm.persistent_chain) != size(vis)
-        # persistent_chain not initialized or batch size changed, re-initialize
-        rbm.persistent_chain = vis
-    end
-    # take positive samples from real data
-    v_pos, h_pos, _, _ = gibbs(rbm, vis)
-    # take negative samples from "fantasy particles"
-    rbm.persistent_chain, _, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
-    return v_pos, h_pos, v_neg, h_neg
+function persistent_contdiv(rbm::RBM, vis::Mat{Float64},
+                            n_gibbs::Int)
+    ## if size(rbm.persistent_chain) != size(vis)
+    ##     # persistent_chain not initialized or batch size changed, re-initialize
+    ##     rbm.persistent_chain = vis
+    ## end
+    ## # take positive samples from real data
+    ## v_pos, h_pos, _, _ = gibbs(rbm, vis)
+    ## # take negative samples from "fantasy particles"
+    ## rbm.persistent_chain, _, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
+    ## return v_pos, h_pos, v_neg, h_neg
 end
 
 
-function gradient()
-    dW = buf
+function gradient_classic(rbm::RBM, vis::Mat{Float64},
+                          config::Dict{Symbol,Any})
+    dW = @get_or_create(config, :dW_buf, similar(rbm.W))
+    sampler = @get_or_create(config, :sampler, contdiv)
+    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)    
     # dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', lr, h_neg, v_neg, 0.0, dW)
-    gemm!('N', 'T', lr, h_pos, v_pos, -1.0, dW)
+    gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
+    gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
     return dW
 end
 
@@ -233,3 +248,13 @@ function components(rbm::AbstractRBM; transpose=true)
 end
 # synonym
 weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
+
+
+
+
+
+function live()
+    X = rand(20, 10)
+    rbm = RBM(MeanDistr, Bernoulli, 20, 10)
+    
+end
