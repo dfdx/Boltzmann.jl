@@ -19,9 +19,9 @@ end
 macro get(dict, key, default_expr)
     return quote
         if haskey($dict, $key)
-            return $dict[$key]
+            $dict[$key]
         else
-            return $default_expr
+            $default_expr
         end
     end
 end

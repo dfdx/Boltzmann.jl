@@ -9,6 +9,7 @@ typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
 typealias Gaussian Normal
 
+
 """
 Pseudo distribution that returns mean as is during sampling, i.e.
 
@@ -115,7 +116,8 @@ function free_energy(rbm::RBM, vis::Mat{Float64})
 end
 
 
-function score_samples(rbm::AbstractRBM, vis::Mat{Float64}; sample_size=10000)
+function score_samples(rbm::AbstractRBM, vis::Mat{Float64};
+                       sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
         # so using only little sample
@@ -136,15 +138,15 @@ end
 
 ## gradient calculation
 
-function contdiv(rbm::RBM, vis::Mat{Float64}, config::Dict{Symbol,Any})
+function contdiv(rbm::RBM, vis::Mat{Float64}, config::Dict)
     n_gibbs::Int = @get_or_create(config, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
 
-function persistent_contdiv(rbm::RBM, vis::Mat{Float64},
-                            n_gibbs::Int)
+## function persistent_contdiv(rbm::RBM, vis::Mat{Float64},
+##                             n_gibbs::Int)
     ## if size(rbm.persistent_chain) != size(vis)
     ##     # persistent_chain not initialized or batch size changed, re-initialize
     ##     rbm.persistent_chain = vis
@@ -154,48 +156,69 @@ function persistent_contdiv(rbm::RBM, vis::Mat{Float64},
     ## # take negative samples from "fantasy particles"
     ## rbm.persistent_chain, _, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     ## return v_pos, h_pos, v_neg, h_neg
-end
+## end
 
 
-function gradient_classic(rbm::RBM, vis::Mat{Float64},
-                          config::Dict{Symbol,Any})
+function gradient_classic(rbm::RBM, vis::Mat{Float64}, config::Dict)
     dW = @get_or_create(config, :dW_buf, similar(rbm.W))
     sampler = @get_or_create(config, :sampler, contdiv)
-    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)    
-    # dW = (h_pos * v_pos') - (h_neg * v_neg')
+    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
+    # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
     gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
     gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
-    return dW
+    # vbias, hbias
+    # TODO: does it makes sence to cache them in `config` as well?
+    db = sum(v_pos, 2) - sum(v_neg, 2)
+    dc = sum(h_pos, 2) - sum(h_neg, 2)
+    return dW, db, dc
 end
+
 
 ## updating
 
-function update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)    
-    # rbm.dW += rbm.momentum * rbm.dW_prev
+function update_grad_learning_rate!(dW::Mat{Float64}, config::Dict)
+    lr = @get(config, :lr, 0.1)
+    # lr = lr / size(v_pos,2) # TODO: how to apply it without breaking
+                              # signature?
+    # same as: dW *= lr
+    scal!(length(dW), lr, dW, 1)
+end
+
+function update_grad_momentum!(dW::Mat{Float64}, config::Dict)
+    momentum = @get(config, :momentum, 0.9)
+    dW_prev = @get_or_create(config, :dW_prev, copy(dW))
+    # same as: dW += momentum * dW_prev
     axpy!(rbm.momentum, rbm.dW_prev, dW)
-    # rbm.W += lr * dW
+end
+
+function update_weights!(rbm::RBM, dW::Mat{Float64})
+    # TODO: db, dc
+    # rbm.vbias += vec(lr * (sum(v_pos, 2) - sum(v_neg, 2)))
+    # rbm.hbias += vec(lr * (sum(h_pos, 2) - sum(h_neg, 2)))
     axpy!(1.0, dW, rbm.W)
-    # save current dW
+    # save previous dW
+    dW_prev = @get_or_create(config, :dW_prev, similar(dW))
     copy!(rbm.dW_prev, dW)
 end
 
 
-function default_update!()
+function update_classic!(rbm::RBM, dW::Mat{Float64}, config::Dict)
+    # apply gradient updaters. note, that updaters all have
+    # the same signature and are essentially composable
+    update_grad_learning_rate!(dW, config)
+    update_grad_momentum!(dW, config)
+    # add gradient to the weight matrix
+    update_weights!(rbm, dW)
 end
 
 
 ## fitting
 
-function fit_batch!(rbm::RBM, vis::Mat{Float64};
-                    persistent=true, buf=nothing, lr=0.1, n_gibbs=1)
-    buf = buf == nothing ? zeros(size(rbm.W)) : buf
-    # v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
-    sampler = persistent ? persistent_contdiv : contdiv
-    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, n_gibbs)
-    lr=lr/size(v_pos,2)
-    update_weights!(rbm, h_pos, v_pos, h_neg, v_neg, lr, buf)
-    rbm.hbias += vec(lr * (sum(h_pos, 2) - sum(h_neg, 2)))
-    rbm.vbias += vec(lr * (sum(v_pos, 2) - sum(v_neg, 2)))
+function fit_batch!(rbm::RBM, vis::Mat{Float64}; config = Dict())
+    grad = @get_or_create(config, :gradient, gradient_classic)
+    upd = @get_or_create(config, :update, update_classic!)
+    dW, db, dc = grad(rbm, vis, config)
+    upd(rbm, dW, config)
     return rbm
 end
 
@@ -256,5 +279,5 @@ weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 function live()
     X = rand(20, 10)
     rbm = RBM(MeanDistr, Bernoulli, 20, 10)
-    
+
 end
