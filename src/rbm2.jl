@@ -24,19 +24,23 @@ end
 
 abstract AbstractRBM
 
-@runonce type RBM{V,H} <: AbstractRBM
-    W::Matrix{Float64}         # matrix of weights between vis and hid vars
-    vbias::Vector{Float64}     # biases for visible variables
-    hbias::Vector{Float64}     # biases for hidden variables
+@runonce type RBM{T,V,H} <: AbstractRBM
+    W::Matrix{T}         # matrix of weights between vis and hid vars
+    vbias::Vector{T}     # biases for visible variables
+    hbias::Vector{T}     # biases for hidden variables
 end
 
-function RBM(V::Type, H::Type,
+function RBM(T::Type, V::Type, H::Type,
              n_vis::Int, n_hid::Int; sigma=0.01)
-    RBM{V,H}(rand(Normal(0, sigma), (n_hid, n_vis)),
+    RBM{T,V,H}(map(T, rand(Normal(0, sigma), (n_hid, n_vis))),
              zeros(n_vis), zeros(n_hid))
 end
 
-function Base.show{V,H}(io::IO, rbm::RBM{V,H})
+RBM(V::Type, H::Type, n_vis::Int, n_hid::Int; sigma=0.01) =
+    RBM(Float64, V, H, n_vis, n_hid; sigma)
+
+
+function Base.show{T,V,H}(io::IO, rbm::RBM{T,V,H})
     n_vis = size(rbm.vbias, 1)
     n_hid = size(rbm.hbias, 1)
     print(io, "RBM{$V,$H}($n_vis, $n_hid)")
@@ -49,13 +53,13 @@ function logistic(x)
 end
 
 
-function hid_means(rbm::RBM, vis::Mat{Float64})
+function hid_means{T}(rbm::RBM, vis::Mat{T})
     p = rbm.W * vis .+ rbm.hbias
     return logistic(p)
 end
 
 
-function vis_means(rbm::RBM, hid::Mat{Float64})
+function vis_means{T}(rbm::RBM, hid::Mat{T})
     p = rbm.W' * hid .+ rbm.vbias
     return logistic(p)
 end
@@ -63,38 +67,38 @@ end
 
 ## samping
 
-function sample(::Type{MeanDistr}, means::Mat{Float64})
+function sample{T}(::Type{MeanDistr}, means::Mat{T})
     return means
 end
 
-function sample(::Type{Bernoulli}, means::Mat{Float64})
-    return float(rand(size(means)) .< means)
+function sample{T}(::Type{Bernoulli}, means::Mat{T})
+    return map(T, float((rand(size(means)) .< means)))
 end
 
 
-function sample(::Type{Gaussian}, means::Mat{Float64})
+function sample{T}(::Type{Gaussian}, means::Mat{T})
     sigma2 = 1                   # using fixed standard diviation
-    samples = zeros(size(means))
+    samples = zeros(T,size(means))
     for j=1:size(means, 2), i=1:size(means, 1)
-        samples[i, j] = rand(Normal(means[i, j], sigma2))
+        samples[i, j] = T(rand(Normal(means[i, j], sigma2)))
     end
     return samples
 end
 
 
-function sample_hiddens{V,H}(rbm::RBM{V, H}, vis::Mat{Float64})
+function sample_hiddens{T,V,H}(rbm::RBM{T,V,H}, vis::Mat{T})
     means = hid_means(rbm, vis)
     return sample(H, means)
 end
 
 
-function sample_visibles{V,H}(rbm::RBM{V,H}, hid::Mat{Float64})
+function sample_visibles{T,V,H}(rbm::RBM{T,V,H}, hid::Mat{T})
     means = vis_means(rbm, hid)
     return sample(V, means)
 end
 
 
-function gibbs(rbm::RBM, vis::Mat{Float64}; n_times=1)
+function gibbs{T}(rbm::RBM, vis::Mat{T}; n_times=1)
     v_pos = vis
     h_pos = sample_hiddens(rbm, v_pos)
     v_neg = sample_visibles(rbm, h_pos)
@@ -109,14 +113,14 @@ end
 
 ## scoring
 
-function free_energy(rbm::RBM, vis::Mat{Float64})
+function free_energy{T}(rbm::RBM, vis::Mat{T})
     vb = sum(vis .* rbm.vbias, 1)
     Wx_b_log = sum(log(1 + exp(rbm.W * vis .+ rbm.hbias)), 1)
     return - vb - Wx_b_log
 end
 
 
-function score_samples(rbm::AbstractRBM, vis::Mat{Float64};
+function score_samples{T}(rbm::AbstractRBM, vis::Mat{T};
                        sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
@@ -138,8 +142,8 @@ end
 
 ## gradient calculation
 
-function contdiv(rbm::RBM, vis::Mat{Float64}, config::Dict)
-    n_gibbs::Int = @get_or_create(config, :n_gibbs, 1)
+function contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
+    n_gibbs = @get_or_create(config, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
@@ -159,15 +163,15 @@ end
 ## end
 
 
-function gradient_classic(rbm::RBM, vis::Mat{Float64}, config::Dict)
+function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
     dW = @get_or_create(config, :dW_buf, similar(rbm.W))
     sampler = @get_or_create(config, :sampler, contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', 1.0, h_neg, v_neg, 0.0, dW)
-    gemm!('N', 'T', 1.0, h_pos, v_pos, -1.0, dW)
+    gemm!('N', 'T', T(1.0), h_neg, v_neg, T(0.0), dW)
+    gemm!('N', 'T', T(1.0), h_pos, v_pos, T(-1.0), dW)
     # vbias, hbias
-    # TODO: does it makes sence to cache them in `config` as well?
+    # TODO: does it makes sence to have buffer for them in `config` as well?
     db = sum(v_pos, 2) - sum(v_neg, 2)
     dc = sum(h_pos, 2) - sum(h_neg, 2)
     return dW, db, dc
@@ -176,33 +180,33 @@ end
 
 ## updating
 
-function update_grad_learning_rate!(dW::Mat{Float64}, config::Dict)
-    lr = @get(config, :lr, 0.1)
+function update_grad_learning_rate!{T}(dW::Mat{T}, config::Dict)
+    lr = @get(config, :lr, T(0.1))
     # lr = lr / size(v_pos,2) # TODO: how to apply it without breaking
                               # signature?
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
 end
 
-function update_grad_momentum!(dW::Mat{Float64}, config::Dict)
+function update_grad_momentum!{T}(dW::Mat{T}, config::Dict)
     momentum = @get(config, :momentum, 0.9)
     dW_prev = @get_or_create(config, :dW_prev, copy(dW))
     # same as: dW += momentum * dW_prev
-    axpy!(rbm.momentum, rbm.dW_prev, dW)
+    axpy!(momentum, dW_prev, dW)
 end
 
-function update_weights!(rbm::RBM, dW::Mat{Float64})
+function update_weights!{T}(rbm::RBM, dW::Mat{T})
     # TODO: db, dc
     # rbm.vbias += vec(lr * (sum(v_pos, 2) - sum(v_neg, 2)))
     # rbm.hbias += vec(lr * (sum(h_pos, 2) - sum(h_neg, 2)))
     axpy!(1.0, dW, rbm.W)
     # save previous dW
     dW_prev = @get_or_create(config, :dW_prev, similar(dW))
-    copy!(rbm.dW_prev, dW)
+    copy!(dW_prev, dW)
 end
 
 
-function update_classic!(rbm::RBM, dW::Mat{Float64}, config::Dict)
+function update_classic!{T}(rbm::RBM, dW::Mat{T}, config::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are essentially composable
     update_grad_learning_rate!(dW, config)
@@ -214,7 +218,7 @@ end
 
 ## fitting
 
-function fit_batch!(rbm::RBM, vis::Mat{Float64}; config = Dict())
+function fit_batch!{T}(rbm::RBM, vis::Mat{T}; config = Dict())
     grad = @get_or_create(config, :gradient, gradient_classic)
     upd = @get_or_create(config, :update, update_classic!)
     dW, db, dc = grad(rbm, vis, config)
@@ -244,29 +248,27 @@ end
 ##     return rbm
 ## end
 
-function fit(rbm::RBM, X::Matrix{Float64};
-             gradient=persistent_contdiv,update! = default_update!, opts...)
-    println(Dict{Symbol,Any}(opts))
+function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict())
 end
 
 
 ## operations on learned RBM
 
-function transform(rbm::RBM, X::Mat{Float64})
+function transform{T}(rbm::RBM, X::Mat{T})
     return hid_means(rbm, X)
 end
 
 
-function generate(rbm::RBM, vis::Vec{Float64}; n_gibbs=1)
+function generate{T}(rbm::RBM, vis::Vec{T}; n_gibbs=1)
     return gibbs(rbm, reshape(vis, length(vis), 1); n_times=n_gibbs)[3]
 end
 
-function generate(rbm::RBM, X::Mat{Float64}; n_gibbs=1)
+function generate{T}(rbm::RBM, X::Mat{T}; n_gibbs=1)
     return gibbs(rbm, X; n_times=n_gibbs)[3]
 end
 
 
-function components(rbm::AbstractRBM; transpose=true)
+function components(rbm::RBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
 # synonym
@@ -277,7 +279,8 @@ weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 
 
 function live()
-    X = rand(20, 10)
-    rbm = RBM(MeanDistr, Bernoulli, 20, 10)
+    X = rand(Float32, 20, 10)
+    rbm = RBM(Float32, MeanDistr, Bernoulli, 20, 10)
+    fit_batch!(rbm, X)
 
 end
