@@ -120,8 +120,8 @@ function free_energy{T}(rbm::RBM, vis::Mat{T})
 end
 
 
-function score_samples{T}(rbm::AbstractRBM, vis::Mat{T};
-                       sample_size=10000)
+function score_samples{T}(rbm::RBM, vis::Mat{T};
+                          sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
         # so using only little sample
@@ -139,6 +139,10 @@ function score_samples{T}(rbm::AbstractRBM, vis::Mat{T};
     return n_feat * log(logistic(fe_corrupted - fe))
 end
 
+function pseudo_likelihood(rbm::RBM, X)
+    return mean(score_samples(rbm, X))
+end
+
 
 ## gradient calculation
 
@@ -149,18 +153,20 @@ function contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
 end
 
 
-## function persistent_contdiv(rbm::RBM, vis::Mat{Float64},
-##                             n_gibbs::Int)
-    ## if size(rbm.persistent_chain) != size(vis)
-    ##     # persistent_chain not initialized or batch size changed, re-initialize
-    ##     rbm.persistent_chain = vis
-    ## end
-    ## # take positive samples from real data
-    ## v_pos, h_pos, _, _ = gibbs(rbm, vis)
-    ## # take negative samples from "fantasy particles"
-    ## rbm.persistent_chain, _, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
-    ## return v_pos, h_pos, v_neg, h_neg
-## end
+function persistent_contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
+    n_gibbs = @get_or_create(config, :n_gibbs, 1)
+    persistent_chain = @get_or_create(config, :persistent_chain, vis)
+    if size(rbm.persistent_chain) != size(vis)
+        # persistent_chain not initialized or batch size changed
+        # re-initialize
+        rbm.persistent_chain = vis
+    end
+    # take positive samples from real data
+    v_pos, h_pos, _, _ = gibbs(rbm, vis)
+    # take negative samples from "fantasy particles"
+    persistent_chain, _, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
+    return v_pos, h_pos, v_neg, h_neg
+end
 
 
 function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
@@ -170,17 +176,17 @@ function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
     gemm!('N', 'T', T(1.0), h_neg, v_neg, T(0.0), dW)
     gemm!('N', 'T', T(1.0), h_pos, v_pos, T(-1.0), dW)
-    # vbias, hbias
-    # TODO: does it makes sence to have buffer for them in `config` as well?
-    db = sum(v_pos, 2) - sum(v_neg, 2)
-    dc = sum(h_pos, 2) - sum(h_neg, 2)
+    # gradient for vbias and hbias
+    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2)
+    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2)
     return dW, db, dc
 end
 
 
 ## updating
 
-function update_grad_learning_rate!{T}(dW::Mat{T}, config::Dict)
+function update_grad_learning_rate!{T}(dW::Mat{T}, db::Vec{T}, dc::Vec{T},
+                                       config::Dict)
     lr = @get(config, :lr, T(0.1))
     # lr = lr / size(v_pos,2) # TODO: how to apply it without breaking
                               # signature?
@@ -188,25 +194,26 @@ function update_grad_learning_rate!{T}(dW::Mat{T}, config::Dict)
     scal!(length(dW), lr, dW, 1)
 end
 
-function update_grad_momentum!{T}(dW::Mat{T}, config::Dict)
+function update_grad_momentum!{T}(dW::Mat{T}, db::Vec{T}, dc::Vec{T},
+                                  config::Dict)
     momentum = @get(config, :momentum, 0.9)
     dW_prev = @get_or_create(config, :dW_prev, copy(dW))
     # same as: dW += momentum * dW_prev
     axpy!(momentum, dW_prev, dW)
 end
 
-function update_weights!{T}(rbm::RBM, dW::Mat{T})
-    # TODO: db, dc
-    # rbm.vbias += vec(lr * (sum(v_pos, 2) - sum(v_neg, 2)))
-    # rbm.hbias += vec(lr * (sum(h_pos, 2) - sum(h_neg, 2)))
+function update_weights!{T}(rbm::RBM, dW::Mat{T}, db::Vec{T}, dc::Vec{T})
     axpy!(1.0, dW, rbm.W)
+    rbm.vbias += db
+    rbm.hbias += dc
     # save previous dW
     dW_prev = @get_or_create(config, :dW_prev, similar(dW))
     copy!(dW_prev, dW)
 end
 
 
-function update_classic!{T}(rbm::RBM, dW::Mat{T}, config::Dict)
+function update_classic!{T}(rbm::RBM, dW::Mat{T},
+                            db::Vec{T}, dc::Vec{T}, config::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are essentially composable
     update_grad_learning_rate!(dW, config)
@@ -218,37 +225,37 @@ end
 
 ## fitting
 
-function fit_batch!{T}(rbm::RBM, vis::Mat{T}; config = Dict())
+function fit_batch!{T}(rbm::RBM, vis::Mat{T}, config = Dict())
     grad = @get_or_create(config, :gradient, gradient_classic)
     upd = @get_or_create(config, :update, update_classic!)
     dW, db, dc = grad(rbm, vis, config)
-    upd(rbm, dW, config)
+    upd(rbm, dW, db, dc, config)
     return rbm
 end
 
 
-## function fit(rbm::RBM, X::Mat{Float64};
-##              persistent=true, lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
-##     @assert minimum(X) >= 0 && maximum(X) <= 1
-##     n_samples = size(X, 2)
-##     n_batches = @compat Int(ceil(n_samples / batch_size))
-##     w_buf = zeros(size(rbm.W))
-##     for itr=1:n_iter
-##         tic()
-##         for i=1:n_batches
-##             batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
-##             batch = full(batch)
-##             fit_batch!(rbm, batch, persistent=persistent,
-##                        buf=w_buf, n_gibbs=n_gibbs)
-##         end
-##         toc()
-##         pseudo_likelihood = mean(score_samples(rbm, X))
-##         info("Iteration #$itr, pseudo-likelihood = $pseudo_likelihood")
-##     end
-##     return rbm
-## end
-
 function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict())
+    @assert minimum(X) >= 0 && maximum(X) <= 1
+    n_examples = size(X, 2)
+    batch_size = @get(config, :batch_size, 100)
+    n_batches = Int(ceil(n_examples / batch_size))
+    n_epochs = @get(config, :n_epochs, 10)
+    scorer = @get_or_create(config, :scorer, pseudo_likelihood)
+    reporter = @get_or_create(config, :reporter, msg -> println(msg))
+    for epoch=1:n_epochs
+        epoch_time = @elapsed begin
+            for i=1:n_batches
+                batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
+                batch = full(batch)
+                fit_batch!(rbm, batch, config)
+            end
+        end
+        score = scorer(rbm, X)
+        # TODO: reporter should get score and elapsed time as parameters
+        # and report in whatever way it needs
+        reporter("Epoch $epoch: score=$score; time taken=$epoch_time")
+    end
+    return rbm
 end
 
 
@@ -281,6 +288,5 @@ weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 function live()
     X = rand(Float32, 20, 10)
     rbm = RBM(Float32, MeanDistr, Bernoulli, 20, 10)
-    fit_batch!(rbm, X)
-
+    fit(rbm, X; config=Dict(:gradient => persistent_contdiv))
 end
