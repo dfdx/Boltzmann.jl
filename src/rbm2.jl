@@ -37,7 +37,7 @@ function RBM(T::Type, V::Type, H::Type,
 end
 
 RBM(V::Type, H::Type, n_vis::Int, n_hid::Int; sigma=0.01) =
-    RBM(Float64, V, H, n_vis, n_hid; sigma)
+    RBM(Float64, V, H, n_vis, n_hid; sigma=sigma)
 
 
 function Base.show{T,V,H}(io::IO, rbm::RBM{T,V,H})
@@ -156,10 +156,10 @@ end
 function persistent_contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
     n_gibbs = @get_or_create(config, :n_gibbs, 1)
     persistent_chain = @get_or_create(config, :persistent_chain, vis)
-    if size(rbm.persistent_chain) != size(vis)
+    if size(persistent_chain) != size(vis)
         # persistent_chain not initialized or batch size changed
         # re-initialize
-        rbm.persistent_chain = vis
+        persistent_chain = vis
     end
     # take positive samples from real data
     v_pos, h_pos, _, _ = gibbs(rbm, vis)
@@ -170,39 +170,41 @@ end
 
 
 function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
-    dW = @get_or_create(config, :dW_buf, similar(rbm.W))
-    sampler = @get_or_create(config, :sampler, contdiv)
+    sampler = @get_or_create(config, :sampler, persistent_contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
+    dW = @get_or_create(config, :dW_buf, similar(rbm.W))
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', T(1.0), h_neg, v_neg, T(0.0), dW)
-    gemm!('N', 'T', T(1.0), h_pos, v_pos, T(-1.0), dW)
+    gemm!('N', 'T', T(1 / size(vis, 2)), h_neg, v_neg, T(0.0), dW)
+    gemm!('N', 'T', T(1 / size(vis, 2)), h_pos, v_pos, T(-1.0), dW)
     # gradient for vbias and hbias
-    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2)
-    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2)
+    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ size(vis, 2)
+    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ size(vis, 2)
     return dW, db, dc
 end
 
 
 ## updating
 
-function update_grad_learning_rate!{T}(dW::Mat{T}, db::Vec{T}, dc::Vec{T},
+function update_delta_learning_rate!{T}(dtheta::Tuple{Mat{T},Vec{T},Vec{T}},
                                        config::Dict)
+    dW, db, dc = dtheta
     lr = @get(config, :lr, T(0.1))
-    # lr = lr / size(v_pos,2) # TODO: how to apply it without breaking
-                              # signature?
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
 end
 
-function update_grad_momentum!{T}(dW::Mat{T}, db::Vec{T}, dc::Vec{T},
+function update_delta_momentum!{T}(dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
                                   config::Dict)
+    dW, db, dc = dtheta
     momentum = @get(config, :momentum, 0.9)
     dW_prev = @get_or_create(config, :dW_prev, copy(dW))
     # same as: dW += momentum * dW_prev
     axpy!(momentum, dW_prev, dW)
 end
 
-function update_weights!{T}(rbm::RBM, dW::Mat{T}, db::Vec{T}, dc::Vec{T})
+function update_weights!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
+                            config::Dict)
+    dW, db, dc = dtheta
     axpy!(1.0, dW, rbm.W)
     rbm.vbias += db
     rbm.hbias += dc
@@ -212,14 +214,14 @@ function update_weights!{T}(rbm::RBM, dW::Mat{T}, db::Vec{T}, dc::Vec{T})
 end
 
 
-function update_classic!{T}(rbm::RBM, dW::Mat{T},
-                            db::Vec{T}, dc::Vec{T}, config::Dict)
+function update_classic!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
+                            config::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are essentially composable
-    update_grad_learning_rate!(dW, config)
-    update_grad_momentum!(dW, config)
+    update_delta_learning_rate!(dtheta, config)
+    update_delta_momentum!(dtheta, config)
     # add gradient to the weight matrix
-    update_weights!(rbm, dW)
+    update_weights!(rbm, dtheta, config)
 end
 
 
@@ -228,13 +230,13 @@ end
 function fit_batch!{T}(rbm::RBM, vis::Mat{T}, config = Dict())
     grad = @get_or_create(config, :gradient, gradient_classic)
     upd = @get_or_create(config, :update, update_classic!)
-    dW, db, dc = grad(rbm, vis, config)
-    upd(rbm, dW, db, dc, config)
+    dtheta = grad(rbm, vis, config)
+    upd(rbm, dtheta, config)
     return rbm
 end
 
 
-function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict())
+function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_examples = size(X, 2)
     batch_size = @get(config, :batch_size, 100)
@@ -253,7 +255,8 @@ function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict())
         score = scorer(rbm, X)
         # TODO: reporter should get score and elapsed time as parameters
         # and report in whatever way it needs
-        reporter("Epoch $epoch: score=$score; time taken=$epoch_time")
+        reporter("Epoch $epoch: score=$score; " *
+                 "time taken=$epoch_time seconds")
     end
     return rbm
 end
@@ -282,11 +285,8 @@ end
 weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 
 
-
-
-
 function live()
     X = rand(Float32, 20, 10)
     rbm = RBM(Float32, MeanDistr, Bernoulli, 20, 10)
-    fit(rbm, X; config=Dict(:gradient => persistent_contdiv))
+    fit(rbm, X; config=Dict{Any,Any}(:sampler => contdiv))
 end

@@ -1,10 +1,10 @@
-#=
+"""
 Julia implementation of a ConditionalRBM from Graham Taylor's PhD Thesis
 
 Links:
     Thesis - http://www.cs.nyu.edu/~gwtaylor/thesis/Taylor_Graham_W_200911_PhD_thesis.pdf
     FCRBM - http://www.cs.toronto.edu/~fritz/absps/fcrbm_icml.pdf
-=#
+"""
 import StatsBase: predict
 
 
@@ -23,7 +23,7 @@ import StatsBase: predict
 end
 
 function ConditionalRBM(V::Type, H::Type, n_vis::Int, n_hid::Int;
-        sigma=0.001, momentum=0.9, steps=5)
+        sigma=0.01, momentum=0.9, steps=5)
 
     ConditionalRBM{V,H}(
         rand(Normal(0, sigma), (n_hid, n_vis)),
