@@ -11,11 +11,11 @@ typealias Gaussian Normal
 
 
 """
-Pseudo distribution that returns mean as is during sampling, i.e.
+Distribution that returns mean as its only value during sampling, i.e.
 
-sample(MeanDistr, means) = means
+sample(Degenerate, means) = means
 """
-type MeanDistr <: Distribution{Distributions.Univariate,
+type Degenerate <: Distribution{Distributions.Univariate,
                                Distributions.Discrete}
 end
 
@@ -67,7 +67,7 @@ end
 
 ## samping
 
-function sample{T}(::Type{MeanDistr}, means::Mat{T})
+function sample{T}(::Type{Degenerate}, means::Mat{T})
     return means
 end
 
@@ -287,6 +287,6 @@ weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 
 function live()
     X = rand(Float32, 20, 10)
-    rbm = RBM(Float32, MeanDistr, Bernoulli, 20, 10)
+    rbm = RBM(Float32, Degenerate, Bernoulli, 20, 10)
     fit(rbm, X; config=Dict{Any,Any}(:sampler => contdiv))
 end
