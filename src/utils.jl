@@ -27,12 +27,32 @@ macro get(dict, key, default_expr)
 end
 
 
-"""Same as `get` function, but evaluates default_expr only if needed"""
+"""
+Same as `@get`, but creates new object from `default_expr` if
+it didn't exist before
+"""
 macro get_or_create(dict, key, default_expr)
     return quote
         if !haskey($dict, $key)
             $dict[$key] = $default_expr
         end
         $dict[$key]
+    end
+end
+
+
+
+"""
+Same as `@get`, but immediately exits function and return `default_expr`
+if key doesn't exist.
+"""
+macro get_or_return(dict, key, default_expr)
+    return quote
+        if haskey($dict, $key)
+            $dict[$key]
+        else
+            return $default_expr
+            nothing  # not reachable, but without it code won't compile
+        end
     end
 end

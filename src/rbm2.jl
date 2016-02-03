@@ -11,7 +11,8 @@ typealias Gaussian Normal
 
 
 """
-Distribution that returns mean as its only value during sampling, i.e.
+Distribution with a single possible value. Used e.g. during sampling
+to provide stable result equal to provided means:
 
 sample(Degenerate, means) = means
 """
@@ -202,6 +203,16 @@ function update_delta_momentum!{T}(dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
     axpy!(momentum, dW_prev, dW)
 end
 
+function update_delta_weight_decay!{T}(dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
+                                       config::Dict)
+    # TODO: this is L2 regularization; should we also consider L1?
+    dW, db, dc = dtheta
+    n_obs = size(dW, 1)
+    decay_rate = @get_or_return(config, :weight_decay_rate, nothing) / n_obs
+    # same as: dW -= decay_rate * dW
+    axpy!(-decay_rate, dW, dW)
+end
+
 function update_weights!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
                             config::Dict)
     dW, db, dc = dtheta
@@ -220,6 +231,7 @@ function update_classic!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
     # the same signature and are essentially composable
     update_delta_learning_rate!(dtheta, config)
     update_delta_momentum!(dtheta, config)
+    update_delta_weight_decay!(dtheta, config)
     # add gradient to the weight matrix
     update_weights!(rbm, dtheta, config)
 end
