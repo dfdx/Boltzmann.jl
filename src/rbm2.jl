@@ -174,28 +174,30 @@ function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
     sampler = @get_or_create(config, :sampler, persistent_contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
     dW = @get_or_create(config, :dW_buf, similar(rbm.W))
+    n_obs = size(vis, 2)
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', T(1 / size(vis, 2)), h_neg, v_neg, T(0.0), dW)
-    gemm!('N', 'T', T(1 / size(vis, 2)), h_pos, v_pos, T(-1.0), dW)
+    gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
+    gemm!('N', 'T', T(1 / n_obs), h_pos, v_pos, T(-1.0), dW)
     # gradient for vbias and hbias
-    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ size(vis, 2)
-    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ size(vis, 2)
+    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
+    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ n_obs
     return dW, db, dc
 end
 
 
 ## updating
 
-function update_delta_learning_rate!{T}(dtheta::Tuple{Mat{T},Vec{T},Vec{T}},
-                                       config::Dict)
+function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
+                                          dtheta::Tuple, config::Dict)
     dW, db, dc = dtheta
     lr = @get(config, :lr, T(0.1))
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
 end
 
-function update_delta_momentum!{T}(dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
-                                  config::Dict)
+
+function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
+                                     dtheta::Tuple, config::Dict)
     dW, db, dc = dtheta
     momentum = @get(config, :momentum, 0.9)
     dW_prev = @get_or_create(config, :dW_prev, copy(dW))
@@ -203,18 +205,43 @@ function update_delta_momentum!{T}(dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
     axpy!(momentum, dW_prev, dW)
 end
 
-function update_delta_weight_decay!{T}(dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
-                                       config::Dict)
-    # TODO: this is L2 regularization; should we also consider L1?
+
+function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
+                                         dtheta::Tuple, config::Dict)
+    # The decay penalty should drive all weights toward
+    # zero by some small amount on each update.
     dW, db, dc = dtheta
-    n_obs = size(dW, 1)
-    decay_rate = @get_or_return(config, :weight_decay_rate, nothing) / n_obs
-    # same as: dW -= decay_rate * dW
-    axpy!(-decay_rate, dW, dW)
+    decay_kind = @get_or_return(config, :weight_decay_kind, nothing)
+    decay_rate = @get(config, :weight_decay_rate,
+                      throw(ArgumentError("If using :weight_decay_kind, weight_decay_rate should also be specified")))    
+    is_l2 = @get(config, :l2, false)
+    if decay_kind == :l2
+        # same as: dW -= decay_rate * W
+        axpy!(-decay_rate, rbm.W, dW)
+    elseif decay_kind == :l1
+        # same as: dW -= decay_rate * sign(W)
+        axpy!(-decay_rate, sign(rbm.W), dW)
+    end
+
 end
 
-function update_weights!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
-                            config::Dict)
+function grad_apply_sparsity!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
+                                         dtheta::Tuple, config::Dict)
+    # The sparsity constraint should only drive the weights
+    # down when the mean activation of hidden units is higher
+    # than the expected (hence why it isn't squared or the abs())
+    dW, db, dc = dtheta    
+    cost = @get_or_return(config, :sparsity_cost, nothing)
+    target = @get(config, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
+    curr_sparsity = mean(hid_means(rbm, X))
+    penalty = cost * (curr_sparsity - target)
+    axpy!(-penalty, dW, dW)
+    axpy!(-penalty, db, db)
+    axpy!(-penalty, dc, dc)
+end
+
+
+function update_weights!(rbm::RBM, dtheta::Tuple, config::Dict)
     dW, db, dc = dtheta
     axpy!(1.0, dW, rbm.W)
     rbm.vbias += db
@@ -225,13 +252,13 @@ function update_weights!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
 end
 
 
-function update_classic!{T}(rbm::RBM, dtheta::Tuple{Mat{T}, Vec{T}, Vec{T}},
-                            config::Dict)
+function update_classic!{T}(rbm::RBM, X::Mat{T}, dtheta::Tuple, config::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are essentially composable
-    update_delta_learning_rate!(dtheta, config)
-    update_delta_momentum!(dtheta, config)
-    update_delta_weight_decay!(dtheta, config)
+    grad_apply_learning_rate!(rbm, X, dtheta, config)
+    grad_apply_momentum!(rbm, X, dtheta, config)
+    grad_apply_weight_decay!(rbm, X, dtheta, config)
+    grad_apply_sparsity!(rbm, X, dtheta, config)
     # add gradient to the weight matrix
     update_weights!(rbm, dtheta, config)
 end
@@ -239,16 +266,16 @@ end
 
 ## fitting
 
-function fit_batch!{T}(rbm::RBM, vis::Mat{T}, config = Dict())
+function fit_batch!{T}(rbm::RBM, X::Mat{T}, config = Dict())
     grad = @get_or_create(config, :gradient, gradient_classic)
     upd = @get_or_create(config, :update, update_classic!)
-    dtheta = grad(rbm, vis, config)
-    upd(rbm, dtheta, config)
+    dtheta = grad(rbm, X, config)
+    upd(rbm, X, dtheta, config)
     return rbm
 end
 
 
-function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict{Any,Any}())
+function fit{T}(rbm::RBM, X::Mat{T}, config = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_examples = size(X, 2)
     batch_size = @get(config, :batch_size, 100)
@@ -273,6 +300,8 @@ function fit{T}(rbm::RBM, X::Matrix{T}; config = Dict{Any,Any}())
     return rbm
 end
 
+fit{T}(rbm::RBM, X::Mat{T}; opts...) = fit(rbm, X, Dict(opts))
+
 
 ## operations on learned RBM
 
@@ -290,6 +319,7 @@ function generate{T}(rbm::RBM, X::Mat{T}; n_gibbs=1)
 end
 
 
+# TODO: `params()` ?
 function components(rbm::RBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
@@ -300,5 +330,9 @@ weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
 function live()
     X = rand(Float32, 20, 10)
     rbm = RBM(Float32, Degenerate, Bernoulli, 20, 10)
-    fit(rbm, X; config=Dict{Any,Any}(:sampler => contdiv))
+    fit(rbm, X,
+        sampler=contdiv,
+        weight_decay=0.01,
+        sparsity_cost=1.0,        
+        sparsity_target=0.1)
 end
