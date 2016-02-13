@@ -1,6 +1,7 @@
 
 include("utils.jl")
-include("rbm2.jl")
+include("reporter.jl")
+include("rbm.jl")
 # include("conditional.jl")
 # include("nets.jl")
 # include("io.jl")
