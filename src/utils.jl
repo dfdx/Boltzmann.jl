@@ -56,3 +56,8 @@ macro get_or_return(dict, key, default_expr)
         end
     end
 end
+
+
+function logistic(x)
+    return 1 ./ (1 + exp(-x))
+end

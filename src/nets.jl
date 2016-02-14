@@ -1,5 +1,5 @@
 
-using Compat
+import Base.getindex
 
 abstract Net
 
@@ -8,7 +8,7 @@ immutable DBN <: Net
     layernames::Vector{AbstractString}
 end
 
-DBN{T<:@compat(Tuple{AbstractString,RBM})}(namedlayers::Vector{T}) =
+DBN{T<:Tuple{AbstractString,RBM}}(namedlayers::Vector{T}) =
     DBN(map(p -> p[2], namedlayers), map(p -> p[1], namedlayers))
     
 
@@ -39,7 +39,7 @@ Base.length(net::Net) = length(net.layers)
 Base.endof(net::Net) = length(net)
 
 
-function mh_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
+function hid_means_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
     hiddens = Array(Array{Float64, 2}, layer)
     hiddens[1] = hid_means(net[1], batch)
     for k=2:layer
@@ -50,27 +50,30 @@ end
 
 
 function transform(net::Net, X::Mat{Float64})
-    return mh_at_layer(net, X, length(net))
+    return hid_means_at_layer(net, X, length(net))
 end
 
 
-function fit(dbn::DBN, X::Mat{Float64};
-             lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
+function fit(dbn::DBN, X::Mat{Float64}; config = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X,2)
+    batch_size = @get(config, :batch_size, 100)
     n_batches = round(Int, ceil(n_samples / batch_size))
+    n_epochs = @get(config, :n_epochs, 10)
+    reporter = @get_or_create(config, :reporter, TextReporter())
     for k = 1:length(dbn.layers)
-        w_buf = zeros(size(dbn[k].W))
-        for itr=1:n_iter
-            info("Layer $(k), iteration $(itr)")
+        for epoch=1:n_epochs
+            report(reporter, dbn, epoch, k)
             for i=1:n_batches
                 batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
-                input = k == 1 ? batch : mh_at_layer(dbn, batch, k-1)
-                fit_batch!(dbn[k], input, buf=w_buf, n_gibbs=n_gibbs)
+                input = k == 1 ? batch : hid_means_at_layer(dbn, batch, k-1)
+                fit_batch!(dbn[k], input, config)
             end
         end
     end
 end
+
+fit{T}(dbn::DBN, X::Mat{T}; opts...) = fit(rbm, X, Dict(opts))
 
 
 function invert(rbm::RBM)

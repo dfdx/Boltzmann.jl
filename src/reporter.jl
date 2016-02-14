@@ -9,4 +9,8 @@ function report(r::TextReporter, rbm::AbstractRBM,
     println("[Epoch $epoch] Score: $score [$(epoch_time)s]")
 end
 
+function report(r::TextReporter, dbn::DBN, epoch::Int, layer::Int)
+    println("[Layer $layer] Starting epoch $epoch")
+end
+
 

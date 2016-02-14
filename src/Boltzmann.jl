@@ -2,11 +2,11 @@
 module Boltzmann
 
 export RBM,
-       ## BernoulliRBM,
-       ## GRBM,
+       BernoulliRBM,
+       GRBM,
        ## ConditionalRBM,
-       ## DBN,
-       ## DAE,
+       DBN,
+       DAE,
        Bernoulli,
        Gaussian,
        Degenerate,
@@ -14,11 +14,13 @@ export RBM,
        transform,
        generate,
        predict,
-       # components,
-       weights
-       ## unroll,
-       ## save_params,
-       ## load_params
+       coef,
+       weights,
+       hbias,
+       vbias,
+       unroll,
+       save_params,
+       load_params
 
 include("core.jl")
 

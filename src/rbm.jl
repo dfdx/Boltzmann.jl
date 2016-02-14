@@ -1,9 +1,8 @@
 
-include("utils.jl")
-
 using Base.LinAlg.BLAS
 using Distributions
 import StatsBase.fit
+import StatsBase.coef
 
 typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
@@ -41,6 +40,14 @@ RBM(V::Type, H::Type, n_vis::Int, n_hid::Int; sigma=0.01) =
     RBM(Float64, V, H, n_vis, n_hid; sigma=sigma)
 
 
+# some well-known RBM kinds
+BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.01) =
+    RBM(Float64, Degenerate, Bernoulli, n_vis, n_hid; sigma=sigma)
+
+GRBM(n_vis::Int, n_hid::Int; sigma=0.01) =
+    RBM(Float64, Normal, Bernoulli, n_vis, n_hid; sigma=sigma)
+
+
 function Base.show{T,V,H}(io::IO, rbm::RBM{T,V,H})
     n_vis = size(rbm.vbias, 1)
     n_hid = size(rbm.hbias, 1)
@@ -48,11 +55,6 @@ function Base.show{T,V,H}(io::IO, rbm::RBM{T,V,H})
 end
 
 ## utils
-
-function logistic(x)
-    return 1 ./ (1 + exp(-x))
-end
-
 
 function hid_means{T}(rbm::RBM, vis::Mat{T})
     p = rbm.W * vis .+ rbm.hbias
@@ -317,20 +319,13 @@ function generate{T}(rbm::RBM, X::Mat{T}; n_gibbs=1)
 end
 
 
-# TODO: `params()` ?
-function components(rbm::RBM; transpose=true)
+function coef(rbm::RBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
-# synonym
-weights(rbm::AbstractRBM; transpose=true) = components(rbm, transpose)
+# synonyms
+weights = coef
 
+hbias(rbm::RBM) = rbm.hbias
 
-function live()
-    X = rand(Float32, 20, 10)
-    rbm = RBM(Float32, Degenerate, Bernoulli, 20, 10)
-    fit(rbm, X,
-        sampler=contdiv,
-        weight_decay=0.01,
-        sparsity_cost=1.0,        
-        sparsity_target=0.1)
-end
+vbias(rbm::RBM) = rbm.vbias
+
