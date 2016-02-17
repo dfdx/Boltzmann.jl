@@ -4,7 +4,7 @@ module Boltzmann
 export RBM,
        BernoulliRBM,
        GRBM,
-       ## ConditionalRBM,
+       ConditionalRBM,
        DBN,
        DAE,
        Bernoulli,

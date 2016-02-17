@@ -151,15 +151,15 @@ end
 ## gradient calculation
 
 function contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
-    n_gibbs = @get_or_create(config, :n_gibbs, 1)
+    n_gibbs = @get(config, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
 
 function persistent_contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
-    n_gibbs = @get_or_create(config, :n_gibbs, 1)
-    persistent_chain = @get_or_create(config, :persistent_chain, vis)
+    n_gibbs = @get(config, :n_gibbs, 1)
+    persistent_chain = @get_array(config, :persistent_chain, size(vis), vis)
     if size(persistent_chain) != size(vis)
         # persistent_chain not initialized or batch size changed
         # re-initialize
@@ -176,7 +176,7 @@ end
 function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
     sampler = @get_or_create(config, :sampler, persistent_contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
-    dW = @get_or_create(config, :dW_buf, similar(rbm.W))
+    dW = @get_array(config, :dW_buf, size(rbm.W), similar(rbm.W))
     n_obs = size(vis, 2)
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
     gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
@@ -203,7 +203,7 @@ function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
                                      dtheta::Tuple, config::Dict)
     dW, db, dc = dtheta
     momentum = @get(config, :momentum, 0.9)
-    dW_prev = @get_or_create(config, :dW_prev, copy(dW))
+    dW_prev = @get_array(config, :dW_prev, size(dW), copy(dW))
     # same as: dW += momentum * dW_prev
     axpy!(momentum, dW_prev, dW)
 end
@@ -250,7 +250,7 @@ function update_weights!(rbm::RBM, dtheta::Tuple, config::Dict)
     rbm.vbias += db
     rbm.hbias += dc
     # save previous dW
-    dW_prev = @get_or_create(config, :dW_prev, similar(dW))
+    dW_prev = @get_array(config, :dW_prev, size(dW), similar(dW))
     copy!(dW_prev, dW)
 end
 

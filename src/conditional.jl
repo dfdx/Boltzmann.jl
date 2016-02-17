@@ -1,52 +1,49 @@
-"""
-Julia implementation of a ConditionalRBM from Graham Taylor's PhD Thesis
 
-Links:
-    Thesis - http://www.cs.nyu.edu/~gwtaylor/thesis/Taylor_Graham_W_200911_PhD_thesis.pdf
-    FCRBM - http://www.cs.toronto.edu/~fritz/absps/fcrbm_icml.pdf
-"""
+## Julia implementation of a ConditionalRBM from Graham Taylor's PhD Thesis
+
+## Links:
+##     Thesis - http://www.cs.nyu.edu/~gwtaylor/thesis/Taylor_Graham_W_200911_PhD_thesis.pdf
+##     FCRBM - http://www.cs.toronto.edu/~fritz/absps/fcrbm_icml.pdf
+
 import StatsBase: predict
 
 
-@runonce type ConditionalRBM{V,H} <: AbstractRBM{V,H}
-    W::Matrix{Float64}  # standard weights
-    A::Matrix{Float64}  # autoregressive params (vis to vis)
-    B::Matrix{Float64}  # hidden params(vis to hid)
-    dyn_vbias::Array{Float64}
-    dyn_hbias::Array{Float64}
-    vbias::Vector{Float64}
-    hbias::Vector{Float64}
+@runonce type ConditionalRBM{T,V,H} <: AbstractRBM
+    W::Matrix{T}  # standard weights
+    A::Matrix{T}  # autoregressive params (vis to vis)
+    B::Matrix{T}  # hidden params(vis to hid)
+    vbias::Vector{T}
+    hbias::Vector{T}
+    dyn_vbias::Array{T}
+    dyn_hbias::Array{T}
     steps::Int
-    dW_prev::Matrix{Float64}
-    persistent_chain::Matrix{Float64}
-    momentum::Float64
+    # dW_prev::Matrix{T}
+    # persistent_chain::Matrix{T}
+    # momentum::Float64
 end
 
-function ConditionalRBM(V::Type, H::Type, n_vis::Int, n_hid::Int;
-        sigma=0.01, momentum=0.9, steps=5)
 
-    ConditionalRBM{V,H}(
-        rand(Normal(0, sigma), (n_hid, n_vis)),
-        rand(Normal(0, sigma), (n_vis, n_vis * steps)),
-        rand(Normal(0, sigma), (n_hid, n_vis * steps)),
-        zeros(n_vis),
-        zeros(n_hid),
-        zeros(n_vis),
-        zeros(n_hid),
-        steps,
-        zeros(n_hid, n_vis),
-        Array(Float64, 0, 0),
-        momentum,
-    )
+function ConditionalRBM(T::Type, V::Type, H::Type,
+                        n_vis::Int, n_hid::Int, steps::Int; sigma=0.01)
+    ConditionalRBM{T,V,H}(
+        map(T, rand(Normal(0, sigma), (n_hid, n_vis))),      
+        map(T, rand(Normal(0, sigma), (n_vis, n_vis * steps))),
+        map(T, rand(Normal(0, sigma), (n_hid, n_vis * steps))),
+        zeros(T, n_vis),
+        zeros(T, n_hid),
+        zeros(T, n_vis),
+        zeros(T, n_hid),
+        steps)
 end
 
-function Base.show{V,H}(io::IO, rbm::RBM{V,H})
-    n_vis = size(rbm.vbias, 1)
-    n_hid = size(rbm.hbias, 1)
-    print(io, "RBM{$V,$H}($n_vis, $n_hid)")
+function Base.show{T,V,H}(io::IO, crbm::ConditionalRBM{T,V,H})
+    n_vis = size(crbm.vbias, 1)
+    n_hid = size(crbm.hbias, 1)
+    steps = crbm.steps
+    print(io, "ConditionalRBM{$T,$V,$H}($n_vis, $n_hid, $steps)")
 end
 
-function split_vis(crbm::ConditionalRBM, vis::Mat{Float64})
+function split_vis{T}(crbm::ConditionalRBM, vis::Mat{T})
     curr_end = length(crbm.vbias)
     hist_start = curr_end + 1
     hist_end = curr_end + curr_end * crbm.steps
@@ -56,20 +53,36 @@ function split_vis(crbm::ConditionalRBM, vis::Mat{Float64})
     return curr, hist
 end
 
-function dynamic_biases!(crbm::ConditionalRBM, history::Mat{Float64})
+function dynamic_biases!{T}(crbm::ConditionalRBM, history::Mat{T})
     crbm.dyn_vbias = crbm.A * history .+ crbm.vbias
     crbm.dyn_hbias = crbm.B * history .+ crbm.hbias
 end
 
-function hid_means(crbm::ConditionalRBM, vis::Mat{Float64})
+function hid_means{T}(crbm::ConditionalRBM, vis::Mat{T})
     p = crbm.W * vis .+ crbm.dyn_hbias
     return logistic(p)
 end
 
-function vis_means(crbm::ConditionalRBM, hid::Mat{Float64})
+function vis_means{T}(crbm::ConditionalRBM, hid::Mat{T})
     p = crbm.W' * hid .+ crbm.dyn_vbias
     return logistic(p)
 end
+
+
+function gradient_classic{T}(crbm::ConditionalRBM, vis::Mat{T}, config::Dict)
+    sampler = @get_or_create(config, :sampler, persistent_contdiv)
+    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
+    dW = @get_array(config, :dW_buf, size(rbm.W), similar(rbm.W))
+    n_obs = size(vis, 2)
+    # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
+    gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
+    gemm!('N', 'T', T(1 / n_obs), h_pos, v_pos, T(-1.0), dW)
+    # gradient for vbias and hbias
+    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
+    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ n_obs
+    return dW, db, dc
+end
+
 
 # No momentum for params
 function update_weights!(crbm::ConditionalRBM, h_pos, v_pos, h_neg, v_neg, hist, lr, buf)
@@ -105,13 +118,13 @@ function update_weights!(crbm::ConditionalRBM, h_pos, v_pos, h_neg, v_neg, hist,
     axpy!(1.0, dB, crbm.B)
 end
 
-function free_energy(crbm::ConditionalRBM, vis::Mat{Float64})
+function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
     vb = sum(vis .* crbm.dyn_vbias, 1)
     Wx_b_log = sum(log(1 + exp(crbm.W * vis .+ crbm.dyn_hbias)), 1)
     return - vb - Wx_b_log
 end
 
-function fit_batch!(crbm::ConditionalRBM, vis::Mat{Float64};
+function fit_batch!{T}(crbm::ConditionalRBM, vis::Mat{T};
                     persistent=true, buf=nothing, lr=0.1, n_gibbs=1)
     buf = buf == nothing ? (zeros(size(crbm.W)), zeros(size(crbm.A)), zeros(size(crbm.B))) : buf
     curr, hist = split_vis(crbm, vis)
@@ -126,11 +139,11 @@ function fit_batch!(crbm::ConditionalRBM, vis::Mat{Float64};
     return crbm
 end
 
-function fit(crbm::ConditionalRBM, X::Mat{Float64};
+function fit{T}(crbm::ConditionalRBM, X::Mat{T};
              persistent=true, lr=0.1, n_iter=10, batch_size=100, n_gibbs=1)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X, 2)
-    n_batches = @compat Int(ceil(n_samples / batch_size))
+    n_batches = Int(ceil(n_samples / batch_size))
     buffers = (zeros(size(crbm.W)), zeros(size(crbm.A)), zeros(size(crbm.B)))
     for itr=1:n_iter
         tic()
@@ -150,24 +163,24 @@ function fit(crbm::ConditionalRBM, X::Mat{Float64};
     return crbm
 end
 
-function transform(crbm::ConditionalRBM, X::Mat{Float64})
+function transform{T}(crbm::ConditionalRBM, X::Mat{T})
     curr, hist = split_vis(crbm, X)
     dynamic_biases!(crbm, hist)
     return hid_means(crbm, curr)
 end
 
 
-function generate(crbm::ConditionalRBM, X::Mat{Float64}; n_gibbs=1)
+function generate{T}(crbm::ConditionalRBM, X::Mat{T}; n_gibbs=1)
     curr, hist = split_vis(crbm, X)
     dynamic_biases!(crbm, hist)
     return gibbs(crbm, curr; n_times=n_gibbs)[3]
 end
 
-generate(crbm::ConditionalRBM, vis::Vec{Float64}; n_gibbs=1) = generate(
+generate{T}(crbm::ConditionalRBM, vis::Vec{T}; n_gibbs=1) = generate(
     crbm, reshape(vis, length(vis), 1); n_gibbs=n_gibbs
 )
 
-function predict(crbm::ConditionalRBM, history::Mat{Float64}; n_gibbs=1)
+function predict{T}(crbm::ConditionalRBM, history::Mat{T}; n_gibbs=1)
     @assert size(history, 1) == size(crbm.A, 2)
 
     curr = sub(history, 1:length(crbm.vbias), :)
@@ -176,14 +189,14 @@ function predict(crbm::ConditionalRBM, history::Mat{Float64}; n_gibbs=1)
     return generate(crbm, vis; n_gibbs=n_gibbs)
 end
 
-predict(crbm::ConditionalRBM, history::Vec{Float64}; n_gibbs=1) = predict(
+predict{T}(crbm::ConditionalRBM, history::Vec{T}; n_gibbs=1) = predict(
     crbm, reshape(history, length(history), 1); n_gibbs=n_gibbs
 )
 
-predict(crbm::ConditionalRBM, vis::Mat{Float64}, hist::Mat{Float64}; n_gibbs=1) = generate(
+predict{T}(crbm::ConditionalRBM, vis::Mat{T}, hist::Mat{T}; n_gibbs=1) = generate(
     crbm, vcat(vis, hist); n_gibbs=n_gibbs
 )
 
-predict(crbm::ConditionalRBM, vis::Vec{Float64}, hist::Vec{Float64}; n_gibbs=1) = predict(
+predict{T}(crbm::ConditionalRBM, vis::Vec{T}, hist::Vec{T}; n_gibbs=1) = predict(
     crbm, reshape(vis, length(vis), 1), reshape(hist, length(hist), 1); n_gibbs=n_gibbs
 )

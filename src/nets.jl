@@ -8,7 +8,7 @@ immutable DBN <: Net
     layernames::Vector{AbstractString}
 end
 
-DBN{T<:Tuple{AbstractString,RBM}}(namedlayers::Vector{T}) =
+DBN{LT<:Tuple{AbstractString,RBM}}(namedlayers::Vector{LT}) =
     DBN(map(p -> p[2], namedlayers), map(p -> p[1], namedlayers))
     
 
@@ -48,6 +48,7 @@ function hid_means_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
     hiddens[end]
 end
 
+# TODO: custom T
 
 function transform(net::Net, X::Mat{Float64})
     return hid_means_at_layer(net, X, length(net))
