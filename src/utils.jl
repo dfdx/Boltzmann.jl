@@ -70,7 +70,8 @@ macro get_array(dict, key, sz, default_expr)
             throw(ArgumentError("Key `$k` exists, but is not an array"))
         end
         if (!haskey($dict, $key) || size($dict[$key]) != $sz)
-            $dict[$key] = $default_expr
+            # ensure $default_expr results in an ordinary array
+            $dict[$key] = convert(Array, $default_expr)
         end
         $dict[$key]
     end

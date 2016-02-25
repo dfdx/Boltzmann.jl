@@ -22,9 +22,9 @@ end
 
 ## types
 
-abstract AbstractRBM
+@runonce abstract AbstractRBM{T,V,H}
 
-@runonce type RBM{T,V,H} <: AbstractRBM
+@runonce type RBM{T,V,H} <: AbstractRBM{T,V,H}
     W::Matrix{T}         # matrix of weights between vis and hid vars
     vbias::Vector{T}     # biases for visible variables
     hbias::Vector{T}     # biases for hidden variables
@@ -89,19 +89,19 @@ function sample{T}(::Type{Gaussian}, means::Mat{T})
 end
 
 
-function sample_hiddens{T,V,H}(rbm::RBM{T,V,H}, vis::Mat{T})
+function sample_hiddens{T,V,H}(rbm::AbstractRBM{T,V,H}, vis::Mat{T})
     means = hid_means(rbm, vis)
     return sample(H, means)
 end
 
 
-function sample_visibles{T,V,H}(rbm::RBM{T,V,H}, hid::Mat{T})
+function sample_visibles{T,V,H}(rbm::AbstractRBM{T,V,H}, hid::Mat{T})
     means = vis_means(rbm, hid)
     return sample(V, means)
 end
 
 
-function gibbs{T}(rbm::RBM, vis::Mat{T}; n_times=1)
+function gibbs{T}(rbm::AbstractRBM, vis::Mat{T}; n_times=1)
     v_pos = vis
     h_pos = sample_hiddens(rbm, v_pos)
     v_neg = sample_visibles(rbm, h_pos)
@@ -123,7 +123,7 @@ function free_energy{T}(rbm::RBM, vis::Mat{T})
 end
 
 
-function score_samples{T}(rbm::RBM, vis::Mat{T};
+function score_samples{T}(rbm::AbstractRBM, vis::Mat{T};
                           sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
@@ -143,21 +143,21 @@ function score_samples{T}(rbm::RBM, vis::Mat{T};
     return map(Float64, squeeze(score_row', 2))
 end
 
-function pseudo_likelihood(rbm::RBM, X)
+function pseudo_likelihood(rbm::AbstractRBM, X)
     return mean(score_samples(rbm, X))
 end
 
 
 ## gradient calculation
 
-function contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
+function contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, config::Dict)
     n_gibbs = @get(config, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
 
-function persistent_contdiv{T}(rbm::RBM, vis::Mat{T}, config::Dict)
+function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, config::Dict)
     n_gibbs = @get(config, :n_gibbs, 1)
     persistent_chain = @get_array(config, :persistent_chain, size(vis), vis)
     if size(persistent_chain) != size(vis)
@@ -178,7 +178,7 @@ function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
     dW = @get_array(config, :dW_buf, size(rbm.W), similar(rbm.W))
     n_obs = size(vis, 2)
-    # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
+    # same as: dW = ((h_pos * v_pos') - (h_neg * v_neg')) / n_obs
     gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
     gemm!('N', 'T', T(1 / n_obs), h_pos, v_pos, T(-1.0), dW)
     # gradient for vbias and hbias
@@ -276,7 +276,7 @@ function fit_batch!{T}(rbm::RBM, X::Mat{T}, config = Dict())
     upd(rbm, X, dtheta, config)
     return rbm
 end
-
+ 
 
 function fit{T}(rbm::RBM, X::Mat{T}, config = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
@@ -290,7 +290,9 @@ function fit{T}(rbm::RBM, X::Mat{T}, config = Dict{Any,Any}())
         epoch_time = @elapsed begin
             for i=1:n_batches
                 batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
-                # batch = full(batch)
+                # BLAS.gemm! can't handle sparse matrices, so cheaper
+                # to make it dense here
+                batch = full(batch) 
                 fit_batch!(rbm, batch, config)
             end
         end
