@@ -257,7 +257,7 @@ end
 
 function update_classic!{T}(rbm::RBM, X::Mat{T}, dtheta::Tuple, config::Dict)
     # apply gradient updaters. note, that updaters all have
-    # the same signature and are essentially composable
+    # the same signature and are thus composable
     grad_apply_learning_rate!(rbm, X, dtheta, config)
     grad_apply_momentum!(rbm, X, dtheta, config)
     grad_apply_weight_decay!(rbm, X, dtheta, config)
@@ -290,7 +290,7 @@ function fit{T}(rbm::RBM, X::Mat{T}, config = Dict{Any,Any}())
         epoch_time = @elapsed begin
             for i=1:n_batches
                 batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
-                batch = full(batch)
+                # batch = full(batch)
                 fit_batch!(rbm, batch, config)
             end
         end

@@ -6,6 +6,8 @@ using Base.Test
 n_vis = 1000
 n_hid = 200
 
+# TODO: test with sparse matrices
+
 const DISTRIBUTIONS = [Degenerate, Gaussian, Bernoulli]
 
 for T in [Float32, Float64]    

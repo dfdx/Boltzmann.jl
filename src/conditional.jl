@@ -5,6 +5,19 @@
 ##     Thesis - http://www.cs.nyu.edu/~gwtaylor/thesis/Taylor_Graham_W_200911_PhD_thesis.pdf
 ##     FCRBM - http://www.cs.toronto.edu/~fritz/absps/fcrbm_icml.pdf
 
+
+# Input data layout for 2 batches and 3 steps of history
+#
+#      batch 1               batch 2
+# |--------------------|--------------------|
+# |  current visible   |  current visible   |
+# |--------------------|--------------------|
+# |  history step 1    |  history step 1    |
+# |  history step 2    |  history step 2    |
+# |  history step 3    |  history step 3    |
+# |--------------------|--------------------|
+
+
 import StatsBase: predict
 
 
@@ -26,7 +39,7 @@ end
 function ConditionalRBM(T::Type, V::Type, H::Type,
                         n_vis::Int, n_hid::Int, steps::Int; sigma=0.01)
     ConditionalRBM{T,V,H}(
-        map(T, rand(Normal(0, sigma), (n_hid, n_vis))),      
+        map(T, rand(Normal(0, sigma), (n_hid, n_vis))),
         map(T, rand(Normal(0, sigma), (n_vis, n_vis * steps))),
         map(T, rand(Normal(0, sigma), (n_hid, n_vis * steps))),
         zeros(T, n_vis),
@@ -84,14 +97,97 @@ function gradient_classic{T}(crbm::ConditionalRBM, vis::Mat{T}, config::Dict)
 end
 
 
-# No momentum for params
-function update_weights!(crbm::ConditionalRBM, h_pos, v_pos, h_neg, v_neg, hist, lr, buf)
-    # Normal W weight update
-    dW = buf[1]
+function grad_apply_learning_rate!{T,V,H}(rbm::ConditionalRBM{T,V,H},
+                                          X::Mat{T},
+                                          dtheta::Tuple, config::Dict)
+    dW, db, dc = dtheta
+    lr = @get(config, :lr, T(0.1))
+    # same as: dW *= lr
+    scal!(length(dW), lr, dW, 1)
+end
 
+
+function grad_apply_momentum!{T,V,H}(rbm::ConditionalRBM{T,V,H}, X::Mat{T},
+                                     dtheta::Tuple, config::Dict)
+    dW, db, dc = dtheta
+    momentum = @get(config, :momentum, 0.9)
+    dW_prev = @get_array(config, :dW_prev, size(dW), copy(dW))
+    # same as: dW += momentum * dW_prev
+    axpy!(momentum, dW_prev, dW)
+end
+
+
+function grad_apply_weight_decay!{T,V,H}(rbm::ConditionalRBM{T,V,H},
+                                         X::Mat{T},
+                                         dtheta::Tuple, config::Dict)
+    # The decay penalty should drive all weights toward
+    # zero by some small amount on each update.
+    dW, db, dc = dtheta
+    decay_kind = @get_or_return(config, :weight_decay_kind, nothing)
+    decay_rate = @get(config, :weight_decay_rate,
+                      throw(ArgumentError("If using :weight_decay_kind, weight_decay_rate should also be specified")))
+    is_l2 = @get(config, :l2, false)
+    if decay_kind == :l2
+        # same as: dW -= decay_rate * W
+        axpy!(-decay_rate, rbm.W, dW)
+    elseif decay_kind == :l1
+        # same as: dW -= decay_rate * sign(W)
+        axpy!(-decay_rate, sign(rbm.W), dW)
+    end
+
+end
+
+function grad_apply_sparsity!{T,V,H}(rbm::ConditionalRBM{T,V,H}, X::Mat{T},
+                                         dtheta::Tuple, config::Dict)
+    # The sparsity constraint should only drive the weights
+    # down when the mean activation of hidden units is higher
+    # than the expected (hence why it isn't squared or the abs())
+    dW, db, dc = dtheta
+    cost = @get_or_return(config, :sparsity_cost, nothing)
+    target = @get(config, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
+    curr_sparsity = mean(hid_means(rbm, X))
+    penalty = cost * (curr_sparsity - target)
+    axpy!(-penalty, dW, dW)
+    axpy!(-penalty, db, db)
+    axpy!(-penalty, dc, dc)
+end
+
+
+function update_weights!(rbm::ConditionalRBM, dtheta::Tuple, config::Dict)
+    dW, dA, dB, da, db = dtheta
+    axpy!(1.0, dW, rbm.W)
+    rbm.vbias += db
+    rbm.hbias += dc
+    # save previous dW
+    dW_prev = @get_array(config, :dW_prev, size(dW), similar(dW))
+    copy!(dW_prev, dW)
+end
+
+
+# TODO: AbstractRBM?
+function update_classic!{T}(rbm::ConditionalRBM, X::Mat{T},
+                            dtheta::Tuple, config::Dict)
+    # apply gradient updaters. note, that updaters all have
+    # the same signature and are thus composable
+    grad_apply_learning_rate!(rbm, X, dtheta, config)
+    grad_apply_momentum!(rbm, X, dtheta, config)
+    grad_apply_weight_decay!(rbm, X, dtheta, config)
+    grad_apply_sparsity!(rbm, X, dtheta, config)
+    # add gradient to the weight matrix
+    update_weights!(rbm, dtheta, config)
+end
+
+# No momentum for params
+function update_weights_old!(crbm::ConditionalRBM, h_pos, v_pos, h_neg, v_neg, hist, lr, buf)
+    # Normal W weight update
+    # dW = buf[1]
+
+    # gradient - should have already been calculated
     # dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', lr, h_neg, v_neg, 0.0, dW)
-    gemm!('N', 'T', lr, h_pos, v_pos, -1.0, dW)
+    # gemm!('N', 'T', lr, h_neg, v_neg, 0.0, dW)
+    # gemm!('N', 'T', lr, h_pos, v_pos, -1.0, dW)
+
+
     # crbm.dW += crbm.momentum * crbm.dW_prev
     axpy!(crbm.momentum, crbm.dW_prev, dW)
     # rbm.W += lr * dW
@@ -124,7 +220,17 @@ function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
     return - vb - Wx_b_log
 end
 
-function fit_batch!{T}(crbm::ConditionalRBM, vis::Mat{T};
+
+function fit_batch!{T}(rbm::RBM, X::Mat{T}, config = Dict())
+    grad = @get_or_create(config, :gradient, gradient_classic)
+    upd = @get_or_create(config, :update, update_classic!)
+    dtheta = grad(rbm, X, config)
+    upd(rbm, X, dtheta, config)
+    return rbm
+end
+
+
+function fit_batch_old!{T}(crbm::ConditionalRBM, vis::Mat{T};
                     persistent=true, buf=nothing, lr=0.1, n_gibbs=1)
     buf = buf == nothing ? (zeros(size(crbm.W)), zeros(size(crbm.A)), zeros(size(crbm.B))) : buf
     curr, hist = split_vis(crbm, vis)
