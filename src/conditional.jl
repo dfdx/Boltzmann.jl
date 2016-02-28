@@ -112,9 +112,7 @@ function gradient_classic{T}(crbm::ConditionalRBM, X::Mat{T},
     # updating hid to hid matrix A
     dB = @get_array(ctx, :dB_buf, size(crbm.B), similar(crbm.B))    
     gemm!('N', 'T', T(1 / n_obs), h_neg, hist, 0.0, dB)
-    gemm!('N', 'T', T(1 / n_obs), h_pos, hist, -1.0, dB)
-    # rbm.B += lr * dW
-    axpy!(1.0, dB, crbm.B)
+    gemm!('N', 'T', T(1 / n_obs), h_pos, hist, -1.0, dB)    
         
     # gradient for vbias and hbias
     db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
@@ -132,6 +130,8 @@ function grad_apply_learning_rate!{T,V,H}(crbm::ConditionalRBM{T,V,H},
     scal!(length(dW), lr, dW, 1)
     scal!(length(dA), lr, dA, 1)
     scal!(length(dB), lr, dB, 1)
+    scal!(length(db), lr, db, 1)
+    scal!(length(dc), lr, dc, 1)
 end
 
 
@@ -139,7 +139,7 @@ function grad_apply_momentum!{T,V,H}(crbm::ConditionalRBM{T,V,H}, X::Mat{T},
                                      dtheta::Tuple, ctx::Dict)
     dW, dA, dB, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
-    dW_prev = @get_array(ctx, :dW_prev, size(dW), copy(dW))
+    dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
     # same as: dW += momentum * dW_prev
     axpy!(momentum, dW_prev, dW)
 end
@@ -288,8 +288,6 @@ end
 predict{T}(crbm::ConditionalRBM, history::Vec{T}; n_gibbs=1) =
     predict(crbm, reshape(history, length(history), 1); n_gibbs=n_gibbs)
 
-predict{T}(crbm::ConditionalRBM, vis::Mat{T}, hist::Mat{T}; n_gibbs=1) =
-    generate(crbm, vcat(vis, hist); n_gibbs=n_gibbs)
 
 predict{T}(crbm::ConditionalRBM, vis::Vec{T}, hist::Vec{T}; n_gibbs=1) =
     predict(crbm, reshape(vis, length(vis), 1),

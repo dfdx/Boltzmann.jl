@@ -196,6 +196,8 @@ function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
     lr = @get(ctx, :lr, T(0.1))
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
+    scal!(length(db), lr, db, 1)
+    scal!(length(dc), lr, dc, 1)
 end
 
 
@@ -203,7 +205,7 @@ function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
                                      dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
-    dW_prev = @get_array(ctx, :dW_prev, size(dW), copy(dW))
+    dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
     # same as: dW += momentum * dW_prev
     axpy!(momentum, dW_prev, dW)
 end
