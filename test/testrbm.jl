@@ -3,11 +3,10 @@ using Boltzmann
 using Distributions
 using Base.Test
 
-n_vis = 1000
-n_hid = 200
-n_obs = 10_000
+n_vis = 200
+n_hid = 50
+n_obs = 1000
 
-# TODO: test with sparse matrices
 
 const DISTRIBUTIONS = [Degenerate, Gaussian, Bernoulli]
 

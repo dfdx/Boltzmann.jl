@@ -1,4 +1,6 @@
 
+# TODO: add support for custom T
+
 import Base.getindex
 
 abstract Net
@@ -48,27 +50,26 @@ function hid_means_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
     hiddens[end]
 end
 
-# TODO: custom T
 
 function transform(net::Net, X::Mat{Float64})
     return hid_means_at_layer(net, X, length(net))
 end
 
 
-function fit(dbn::DBN, X::Mat{Float64}; config = Dict{Any,Any}())
+function fit(dbn::DBN, X::Mat{Float64}; ctx = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_samples = size(X,2)
-    batch_size = @get(config, :batch_size, 100)
+    batch_size = @get(ctx, :batch_size, 100)
     n_batches = round(Int, ceil(n_samples / batch_size))
-    n_epochs = @get(config, :n_epochs, 10)
-    reporter = @get_or_create(config, :reporter, TextReporter())
+    n_epochs = @get(ctx, :n_epochs, 10)
+    reporter = @get_or_create(ctx, :reporter, TextReporter())
     for k = 1:length(dbn.layers)
         for epoch=1:n_epochs
             report(reporter, dbn, epoch, k)
             for i=1:n_batches
                 batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
                 input = k == 1 ? batch : hid_means_at_layer(dbn, batch, k-1)
-                fit_batch!(dbn[k], input, config)
+                fit_batch!(dbn[k], input, ctx)
             end
         end
     end

@@ -150,16 +150,16 @@ end
 
 ## gradient calculation
 
-function contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, config::Dict)
-    n_gibbs = @get(config, :n_gibbs, 1)
+function contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
+    n_gibbs = @get(ctx, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
 
-function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, config::Dict)
-    n_gibbs = @get(config, :n_gibbs, 1)
-    persistent_chain = @get_array(config, :persistent_chain, size(vis), vis)
+function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
+    n_gibbs = @get(ctx, :n_gibbs, 1)
+    persistent_chain = @get_array(ctx, :persistent_chain, size(vis), vis)
     if size(persistent_chain) != size(vis)
         # persistent_chain not initialized or batch size changed
         # re-initialize
@@ -173,10 +173,10 @@ function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, config::Dict)
 end
 
 
-function gradient_classic{T}(rbm::RBM, vis::Mat{T}, config::Dict)
-    sampler = @get_or_create(config, :sampler, persistent_contdiv)
-    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, config)
-    dW = @get_array(config, :dW_buf, size(rbm.W), similar(rbm.W))
+function gradient_classic{T}(rbm::RBM, vis::Mat{T}, ctx::Dict)
+    sampler = @get_or_create(ctx, :sampler, persistent_contdiv)
+    v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, ctx)
+    dW = @get_array(ctx, :dW_buf, size(rbm.W), similar(rbm.W))
     n_obs = size(vis, 2)
     # same as: dW = ((h_pos * v_pos') - (h_neg * v_neg')) / n_obs
     gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
@@ -191,33 +191,33 @@ end
 ## updating
 
 function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                          dtheta::Tuple, config::Dict)
+                                          dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
-    lr = @get(config, :lr, T(0.1))
+    lr = @get(ctx, :lr, T(0.1))
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
 end
 
 
 function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                     dtheta::Tuple, config::Dict)
+                                     dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
-    momentum = @get(config, :momentum, 0.9)
-    dW_prev = @get_array(config, :dW_prev, size(dW), copy(dW))
+    momentum = @get(ctx, :momentum, 0.9)
+    dW_prev = @get_array(ctx, :dW_prev, size(dW), copy(dW))
     # same as: dW += momentum * dW_prev
     axpy!(momentum, dW_prev, dW)
 end
 
 
 function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                         dtheta::Tuple, config::Dict)
+                                         dtheta::Tuple, ctx::Dict)
     # The decay penalty should drive all weights toward
     # zero by some small amount on each update.
     dW, db, dc = dtheta
-    decay_kind = @get_or_return(config, :weight_decay_kind, nothing)
-    decay_rate = @get(config, :weight_decay_rate,
+    decay_kind = @get_or_return(ctx, :weight_decay_kind, nothing)
+    decay_rate = @get(ctx, :weight_decay_rate,
                       throw(ArgumentError("If using :weight_decay_kind, weight_decay_rate should also be specified")))    
-    is_l2 = @get(config, :l2, false)
+    is_l2 = @get(ctx, :l2, false)
     if decay_kind == :l2
         # same as: dW -= decay_rate * W
         axpy!(-decay_rate, rbm.W, dW)
@@ -229,13 +229,13 @@ function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
 end
 
 function grad_apply_sparsity!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                         dtheta::Tuple, config::Dict)
+                                         dtheta::Tuple, ctx::Dict)
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
     # than the expected (hence why it isn't squared or the abs())
     dW, db, dc = dtheta    
-    cost = @get_or_return(config, :sparsity_cost, nothing)
-    target = @get(config, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
+    cost = @get_or_return(ctx, :sparsity_cost, nothing)
+    target = @get(ctx, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, X))
     penalty = cost * (curr_sparsity - target)
     axpy!(-penalty, dW, dW)
@@ -244,48 +244,48 @@ function grad_apply_sparsity!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
 end
 
 
-function update_weights!(rbm::RBM, dtheta::Tuple, config::Dict)
+function update_weights!(rbm::RBM, dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
     axpy!(1.0, dW, rbm.W)
     rbm.vbias += db
     rbm.hbias += dc
     # save previous dW
-    dW_prev = @get_array(config, :dW_prev, size(dW), similar(dW))
+    dW_prev = @get_array(ctx, :dW_prev, size(dW), similar(dW))
     copy!(dW_prev, dW)
 end
 
 
-function update_classic!{T}(rbm::RBM, X::Mat{T}, dtheta::Tuple, config::Dict)
+function update_classic!{T}(rbm::RBM, X::Mat{T}, dtheta::Tuple, ctx::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are thus composable
-    grad_apply_learning_rate!(rbm, X, dtheta, config)
-    grad_apply_momentum!(rbm, X, dtheta, config)
-    grad_apply_weight_decay!(rbm, X, dtheta, config)
-    grad_apply_sparsity!(rbm, X, dtheta, config)
+    grad_apply_learning_rate!(rbm, X, dtheta, ctx)
+    grad_apply_momentum!(rbm, X, dtheta, ctx)
+    grad_apply_weight_decay!(rbm, X, dtheta, ctx)
+    grad_apply_sparsity!(rbm, X, dtheta, ctx)
     # add gradient to the weight matrix
-    update_weights!(rbm, dtheta, config)
+    update_weights!(rbm, dtheta, ctx)
 end
 
 
 ## fitting
 
-function fit_batch!{T}(rbm::RBM, X::Mat{T}, config = Dict())
-    grad = @get_or_create(config, :gradient, gradient_classic)
-    upd = @get_or_create(config, :update, update_classic!)
-    dtheta = grad(rbm, X, config)
-    upd(rbm, X, dtheta, config)
+function fit_batch!{T}(rbm::RBM, X::Mat{T}, ctx = Dict())
+    grad = @get_or_create(ctx, :gradient, gradient_classic)
+    upd = @get_or_create(ctx, :update, update_classic!)
+    dtheta = grad(rbm, X, ctx)
+    upd(rbm, X, dtheta, ctx)
     return rbm
 end
  
 
-function fit{T}(rbm::RBM, X::Mat{T}, config = Dict{Any,Any}())
+function fit{T}(rbm::RBM, X::Mat{T}, ctx = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_examples = size(X, 2)
-    batch_size = @get(config, :batch_size, 100)
+    batch_size = @get(ctx, :batch_size, 100)
     n_batches = Int(ceil(n_examples / batch_size))
-    n_epochs = @get(config, :n_epochs, 10)
-    scorer = @get_or_create(config, :scorer, pseudo_likelihood)
-    reporter = @get_or_create(config, :reporter, TextReporter())
+    n_epochs = @get(ctx, :n_epochs, 10)
+    scorer = @get_or_create(ctx, :scorer, pseudo_likelihood)
+    reporter = @get_or_create(ctx, :reporter, TextReporter())
     for epoch=1:n_epochs
         epoch_time = @elapsed begin
             for i=1:n_batches
@@ -293,7 +293,7 @@ function fit{T}(rbm::RBM, X::Mat{T}, config = Dict{Any,Any}())
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
                 batch = full(batch) 
-                fit_batch!(rbm, batch, config)
+                fit_batch!(rbm, batch, ctx)
             end
         end
         score = scorer(rbm, X)
