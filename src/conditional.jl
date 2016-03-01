@@ -8,6 +8,10 @@
 
 # Input data layout for 2 batches and 3 steps of history
 #
+# NOTE: in the code below the history is referred to as `cond`
+# since technically you can condition on any features not just
+# previous time steps.
+#
 #      batch 1               batch 2
 # |--------------------|--------------------|-----
 # |  current visible   |  current visible   | ...
@@ -29,26 +33,37 @@ import StatsBase: predict
     hbias::Vector{T}
     dyn_vbias::Array{T}
     dyn_hbias::Array{T}
-    steps::Int
 end
 
 
 function ConditionalRBM(T::Type, V::Type, H::Type,
-                        n_vis::Int, n_hid::Int, steps::Int; sigma=0.01)
+                        n_vis::Int, n_hid::Int, n_cond::Int; sigma=0.01)
     ConditionalRBM{T,V,H}(
         map(T, rand(Normal(0, sigma), (n_hid, n_vis))),
-        map(T, rand(Normal(0, sigma), (n_vis, n_vis * steps))),
-        map(T, rand(Normal(0, sigma), (n_hid, n_vis * steps))),
+        map(T, rand(Normal(0, sigma), (n_vis, n_cond))),
+        map(T, rand(Normal(0, sigma), (n_hid, n_cond))),
         zeros(T, n_vis),
         zeros(T, n_hid),
         zeros(T, n_vis),
         zeros(T, n_hid),
-        steps)
+    )
+end
+
+function ConditionalRBM(V::Type, H::Type,
+                        n_vis::Int, n_hid::Int, n_cond::Int; sigma=0.01)
+    ConditionalRBM(Float64, V, H, n_vis, n_hid, n_cond;
+                   sigma=sigma)
+end
+
+function ConditionalRBM(T::Type, V::Type, H::Type, n_vis::Int, n_hid::Int;
+                        steps=5, sigma=0.01)
+    ConditionalRBM(T, V, H, n_vis, n_hid, (n_vis * steps);
+                   sigma=sigma)
 end
 
 function ConditionalRBM(V::Type, H::Type, n_vis::Int, n_hid::Int;
                         steps=5, sigma=0.01)
-    ConditionalRBM(Float64, Bernoulli, Bernoulli, n_vis, n_hid, steps;
+    ConditionalRBM(Float64, V, H, n_vis, n_hid, (n_vis * steps);
                    sigma=sigma)
 end
 
@@ -56,25 +71,24 @@ end
 function Base.show{T,V,H}(io::IO, crbm::ConditionalRBM{T,V,H})
     n_vis = size(crbm.vbias, 1)
     n_hid = size(crbm.hbias, 1)
-    steps = crbm.steps
-    print(io, "ConditionalRBM{$T,$V,$H}($n_vis, $n_hid, $steps)")
+    n_cond = size(crbm.A, 2)
+    print(io, "ConditionalRBM{$T,$V,$H}($n_vis, $n_hid, $n_cond)")
 end
 
 
 function split_vis{T}(crbm::ConditionalRBM, vis::Mat{T})
-    curr_end = length(crbm.vbias)
-    hist_start = curr_end + 1
-    hist_end = curr_end + curr_end * crbm.steps
+    vis_size = length(crbm.vbias)
 
-    curr = sub(vis, 1:curr_end, :)
-    hist = sub(vis, hist_start:hist_end, :)
-    return curr, hist
+    curr = sub(vis, 1:vis_size, :)
+    cond = sub(vis, (vis_size + 1):(vis_size + size(crbm.A, 2)), :)
+
+    return curr, cond
 end
 
 
-function dynamic_biases!{T}(crbm::ConditionalRBM, history::Mat{T})
-    crbm.dyn_vbias = crbm.A * history .+ crbm.vbias
-    crbm.dyn_hbias = crbm.B * history .+ crbm.hbias
+function dynamic_biases!{T}(crbm::ConditionalRBM, cond::Mat{T})
+    crbm.dyn_vbias = crbm.A * cond .+ crbm.vbias
+    crbm.dyn_hbias = crbm.B * cond .+ crbm.hbias
 end
 
 
@@ -92,11 +106,11 @@ end
 
 function gradient_classic{T}(crbm::ConditionalRBM, X::Mat{T},
                           ctx::Dict)
-    vis, hist = split_vis(crbm, X)
+    vis, cond = split_vis(crbm, X)
     sampler = @get_or_create(ctx, :sampler, persistent_contdiv)
-    v_pos, h_pos, v_neg, h_neg = sampler(crbm, vis, ctx)    
+    v_pos, h_pos, v_neg, h_neg = sampler(crbm, vis, ctx)
     n_obs = size(vis, 2)
-    # updating weight matrix W    
+    # updating weight matrix W
     dW = @get_array(ctx, :dW_buf, size(crbm.W), similar(crbm.W))
     # same as: dW = ((h_pos * v_pos') - (h_neg * v_neg')) / n_obs
     gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
@@ -105,15 +119,15 @@ function gradient_classic{T}(crbm::ConditionalRBM, X::Mat{T},
     # updating vis to vis matrix A
     dA = @get_array(ctx, :dA_buf, size(crbm.A), similar(crbm.A))
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', T(1 / n_obs), v_neg, hist, 0.0, dA)
-    gemm!('N', 'T', T(1 / n_obs), v_pos, hist, -1.0, dA)
-    
+    gemm!('N', 'T', T(1 / n_obs), v_neg, cond, 0.0, dA)
+    gemm!('N', 'T', T(1 / n_obs), v_pos, cond, -1.0, dA)
+
 
     # updating hid to hid matrix A
-    dB = @get_array(ctx, :dB_buf, size(crbm.B), similar(crbm.B))    
-    gemm!('N', 'T', T(1 / n_obs), h_neg, hist, 0.0, dB)
-    gemm!('N', 'T', T(1 / n_obs), h_pos, hist, -1.0, dB)    
-        
+    dB = @get_array(ctx, :dB_buf, size(crbm.B), similar(crbm.B))
+    gemm!('N', 'T', T(1 / n_obs), h_neg, cond, 0.0, dB)
+    gemm!('N', 'T', T(1 / n_obs), h_pos, cond, -1.0, dB)
+
     # gradient for vbias and hbias
     db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
     dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ n_obs
@@ -224,8 +238,8 @@ end
 function fit_batch!{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict())
     grad = @get_or_create(ctx, :gradient, gradient_classic)
     upd = @get_or_create(ctx, :update, update_classic!)
-    curr, hist = split_vis(crbm, X)
-    dynamic_biases!(crbm, hist)
+    curr, cond = split_vis(crbm, X)
+    dynamic_biases!(crbm, cond)
     dtheta = grad(crbm, X, ctx)
     upd(crbm, X, dtheta, ctx)
     return crbm
@@ -248,8 +262,8 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
                 fit_batch!(crbm, batch, ctx)
             end
         end
-        curr, hist = split_vis(crbm, X)
-        dynamic_biases!(crbm, hist)
+        curr, cond = split_vis(crbm, X)
+        dynamic_biases!(crbm, cond)
         score = scorer(crbm, curr)
         report(reporter, crbm, epoch, epoch_time, score)
     end
@@ -260,15 +274,15 @@ fit{T}(crbm::ConditionalRBM, X::Mat{T}; opts...) = fit(crbm, X, Dict(opts))
 
 
 function transform{T}(crbm::ConditionalRBM, X::Mat{T})
-    curr, hist = split_vis(crbm, X)
-    dynamic_biases!(crbm, hist)
+    curr, cond = split_vis(crbm, X)
+    dynamic_biases!(crbm, cond)
     return hid_means(crbm, curr)
 end
 
 
 function generate{T}(crbm::ConditionalRBM, X::Mat{T}; n_gibbs=1)
-    curr, hist = split_vis(crbm, X)
-    dynamic_biases!(crbm, hist)
+    curr, cond = split_vis(crbm, X)
+    dynamic_biases!(crbm, cond)
     return gibbs(crbm, curr; n_times=n_gibbs)[3]
 end
 
@@ -276,19 +290,19 @@ generate{T}(crbm::ConditionalRBM, vis::Vec{T}; n_gibbs=1) =
     generate(crbm, reshape(vis, length(vis), 1); n_gibbs=n_gibbs)
 
 
-function predict{T}(crbm::ConditionalRBM, history::Mat{T}; n_gibbs=1)
-    @assert size(history, 1) == size(crbm.A, 2)
+function predict{T}(crbm::ConditionalRBM, cond::Mat{T}; n_gibbs=1)
+    @assert size(cond, 1) == size(crbm.A, 2)
 
-    curr = sub(history, 1:length(crbm.vbias), :)
-    vis = vcat(curr, history)
+    curr = sub(cond, 1:length(crbm.vbias), :)
+    vis = vcat(curr, cond)
 
     return generate(crbm, vis; n_gibbs=n_gibbs)
 end
 
-predict{T}(crbm::ConditionalRBM, history::Vec{T}; n_gibbs=1) =
-    predict(crbm, reshape(history, length(history), 1); n_gibbs=n_gibbs)
+predict{T}(crbm::ConditionalRBM, cond::Vec{T}; n_gibbs=1) =
+    predict(crbm, reshape(cond, length(cond), 1); n_gibbs=n_gibbs)
 
 
-predict{T}(crbm::ConditionalRBM, vis::Vec{T}, hist::Vec{T}; n_gibbs=1) =
+predict{T}(crbm::ConditionalRBM, vis::Vec{T}, cond::Vec{T}; n_gibbs=1) =
     predict(crbm, reshape(vis, length(vis), 1),
-            reshape(hist, length(hist), 1); n_gibbs=n_gibbs)
+            reshape(cond, length(cond), 1); n_gibbs=n_gibbs)
