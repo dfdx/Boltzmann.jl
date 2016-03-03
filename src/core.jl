@@ -6,5 +6,3 @@ include("nets.jl")
 include("io.jl")
 include("reporter.jl")
 
-
-# TODO: check deprecated options
