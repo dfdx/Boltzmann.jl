@@ -118,7 +118,29 @@ end
 
 function free_energy{T}(rbm::RBM, vis::Mat{T})
     vb = sum(vis .* rbm.vbias, 1)
-    Wx_b_log = sum(log(1 + exp(rbm.W * vis .+ rbm.hbias)), 1)
+
+    fe_exp = 1 + exp(rbm.W * vis .+ rbm.hbias)
+
+    # Iterate over fe_exp and shift any 0s or Infs
+    # to avoid producing or propagating any Infs
+    # into the rest of the calculation.
+    for i in eachindex(fe_exp)
+        if fe_exp[i] == 0.0
+            fe_exp[i] = nextfloat(fe_exp[i])
+        end
+
+        if isinf(fe_exp[i])
+            if fe_exp[i] > 0.0
+                fe_exp[i] = prevfloat(fe_exp[i])
+            else
+                fe_exp[i] = nextfloat(fe_exp[i])
+            end
+        end
+    end
+
+    fe_log = log(fe_exp)
+    Wx_b_log = sum(log(fe_exp), 1)
+
     return - vb - Wx_b_log
 end
 
@@ -218,7 +240,7 @@ function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
     dW, db, dc = dtheta
     decay_kind = @get_or_return(ctx, :weight_decay_kind, nothing)
     decay_rate = @get(ctx, :weight_decay_rate,
-                      throw(ArgumentError("If using :weight_decay_kind, weight_decay_rate should also be specified")))    
+                      throw(ArgumentError("If using :weight_decay_kind, weight_decay_rate should also be specified")))
     is_l2 = @get(ctx, :l2, false)
     if decay_kind == :l2
         # same as: dW -= decay_rate * W
@@ -235,7 +257,7 @@ function grad_apply_sparsity!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
     # than the expected (hence why it isn't squared or the abs())
-    dW, db, dc = dtheta    
+    dW, db, dc = dtheta
     cost = @get_or_return(ctx, :sparsity_cost, nothing)
     target = @get(ctx, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, X))
@@ -278,7 +300,7 @@ function fit_batch!{T}(rbm::RBM, X::Mat{T}, ctx = Dict())
     upd(rbm, X, dtheta, ctx)
     return rbm
 end
- 
+
 
 function fit{T}(rbm::RBM, X::Mat{T}, ctx = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
@@ -295,7 +317,7 @@ function fit{T}(rbm::RBM, X::Mat{T}, ctx = Dict{Any,Any}())
                 batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
-                batch = full(batch) 
+                batch = full(batch)
                 fit_batch!(rbm, batch, ctx)
             end
         end
