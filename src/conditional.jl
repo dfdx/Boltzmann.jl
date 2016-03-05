@@ -119,14 +119,14 @@ function gradient_classic{T}(crbm::ConditionalRBM, X::Mat{T},
     # updating vis to vis matrix A
     dA = @get_array(ctx, :dA_buf, size(crbm.A), similar(crbm.A))
     # same as: dW = (h_pos * v_pos') - (h_neg * v_neg')
-    gemm!('N', 'T', T(1 / n_obs), v_neg, cond, 0.0, dA)
-    gemm!('N', 'T', T(1 / n_obs), v_pos, cond, -1.0, dA)
+    gemm!('N', 'T', T(1 / n_obs), v_neg, cond, T(0.0), dA)
+    gemm!('N', 'T', T(1 / n_obs), v_pos, cond, T(-1.0), dA)
 
 
     # updating hid to hid matrix A
     dB = @get_array(ctx, :dB_buf, size(crbm.B), similar(crbm.B))
-    gemm!('N', 'T', T(1 / n_obs), h_neg, cond, 0.0, dB)
-    gemm!('N', 'T', T(1 / n_obs), h_pos, cond, -1.0, dB)
+    gemm!('N', 'T', T(1 / n_obs), h_neg, cond, T(0.0), dB)
+    gemm!('N', 'T', T(1 / n_obs), h_pos, cond, T(-1.0), dB)
 
     # gradient for vbias and hbias
     db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
@@ -190,9 +190,10 @@ function grad_apply_sparsity!{T,V,H}(rbm::ConditionalRBM{T,V,H}, X::Mat{T},
     # than the expected (hence why it isn't squared or the abs())
     dW, dA, dB, db, dc = dtheta
     cost = @get_or_return(ctx, :sparsity_cost, nothing)
+    vis, cond = split_vis(rbm, X)
     target = @get(ctx, :sparsity_target,
                   throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
-    curr_sparsity = mean(hid_means(rbm, X))
+    curr_sparsity = mean(hid_means(rbm, vis))
     penalty = cost * (curr_sparsity - target)
     axpy!(-penalty, dW, dW)
     axpy!(-penalty, dA, dA)
