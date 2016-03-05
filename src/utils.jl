@@ -88,6 +88,7 @@ const KNOWN_OPTIONS =
      :batch_size, :n_epochs, :n_gibbs,
      :lr, :momentum, :weight_decay_kind, :weight_decay_rate,
      :sparsity_cost, :sparsity_target,
+     :randomize,
      # deprecated options
      :n_iter]
 const DEPRECATED_OPTIONS = Dict(:n_iter => :n_epochs)
@@ -105,3 +106,14 @@ function check_options(opts::Dict)
     end
 end
 
+
+function split_evenly(n, len)
+    n_parts = Int(ceil(n / len))
+    parts = Array(Tuple, n_parts)
+    for i=1:n_parts
+        start_idx = (i-1)*len + 1
+        end_idx = min(i*len, n)
+        parts[i] = (start_idx, end_idx)
+    end
+    return parts
+end

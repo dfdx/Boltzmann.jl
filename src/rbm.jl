@@ -3,6 +3,7 @@ using Base.LinAlg.BLAS
 using Distributions
 import StatsBase.fit
 import StatsBase.coef
+import StatsBase: sample, sample!
 
 typealias Mat{T} AbstractArray{T, 2}
 typealias Vec{T} AbstractArray{T, 1}
@@ -284,15 +285,18 @@ function fit{T}(rbm::RBM, X::Mat{T}, ctx = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     check_options(ctx)
     n_examples = size(X, 2)
-    batch_size = @get(ctx, :batch_size, 100)
-    n_batches = Int(ceil(n_examples / batch_size))
+    batch_size = @get(ctx, :batch_size, 100)    
+    batch_idxs = split_evenly(n_examples, batch_size)
+    if @get(ctx, :randomize, false)
+        batch_idxs = sample(batch_idxs, length(batch_idxs); replace=false)
+    end
     n_epochs = @get(ctx, :n_epochs, 10)
     scorer = @get_or_create(ctx, :scorer, pseudo_likelihood)
     reporter = @get_or_create(ctx, :reporter, TextReporter())
     for epoch=1:n_epochs
         epoch_time = @elapsed begin
-            for i=1:n_batches
-                batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
+            for idxs in batch_idxs
+                batch = X[:, idxs[1]:idxs[2]]
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
                 batch = full(batch) 

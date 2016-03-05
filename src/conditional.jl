@@ -250,14 +250,17 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_examples = size(X, 2)
     batch_size = @get(ctx, :batch_size, 100)
-    n_batches = Int(ceil(n_examples / batch_size))
+    batch_idxs = split_evenly(n_examples, batch_size)
+    if @get(ctx, :randomize, false)
+        batch_idxs = sample(batch_idxs, length(batch_idxs); replace=false)
+    end
     n_epochs = @get(ctx, :n_epochs, 10)
     scorer = @get_or_create(ctx, :scorer, pseudo_likelihood)
     reporter = @get_or_create(ctx, :reporter, TextReporter())
     for epoch=1:n_epochs
         epoch_time = @elapsed begin
-            for i=1:n_batches
-                batch = X[:, ((i-1)*batch_size + 1):min(i*batch_size, end)]
+            for idxs in batch_idxs
+                batch = X[:, idxs[1]:idxs[2]]
                 # batch = full(batch)
                 fit_batch!(crbm, batch, ctx)
             end
