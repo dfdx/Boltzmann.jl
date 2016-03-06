@@ -303,11 +303,11 @@ function fit_batch!{T}(rbm::RBM, X::Mat{T}, ctx = Dict())
 end
 
 
-function fit{T}(rbm::RBM, X::Mat{T}, ctx = Dict{Any,Any}())
+function fit{T}(rbm::RBM{T}, X::Mat, ctx = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     check_options(ctx)
     n_examples = size(X, 2)
-    batch_size = @get(ctx, :batch_size, 100)    
+    batch_size = @get(ctx, :batch_size, 100)
     batch_idxs = split_evenly(n_examples, batch_size)
     if @get(ctx, :randomize, false)
         batch_idxs = sample(batch_idxs, length(batch_idxs); replace=false)
@@ -317,11 +317,11 @@ function fit{T}(rbm::RBM, X::Mat{T}, ctx = Dict{Any,Any}())
     reporter = @get_or_create(ctx, :reporter, TextReporter())
     for epoch=1:n_epochs
         epoch_time = @elapsed begin
-            for idxs in batch_idxs
-                batch = X[:, idxs[1]:idxs[2]]
+            for (batch_start, batch_end) in batch_idxs
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
-                batch = full(batch)
+                batch = full(X[:, batch_start:batch_end])
+                batch = convert(Array{T}, batch)
                 fit_batch!(rbm, batch, ctx)
             end
         end
@@ -359,4 +359,3 @@ weights = coef
 hbias(rbm::RBM) = rbm.hbias
 
 vbias(rbm::RBM) = rbm.vbias
-

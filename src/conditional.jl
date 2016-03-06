@@ -260,9 +260,11 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
     reporter = @get_or_create(ctx, :reporter, TextReporter())
     for epoch=1:n_epochs
         epoch_time = @elapsed begin
-            for idxs in batch_idxs
-                batch = X[:, idxs[1]:idxs[2]]
-                # batch = full(batch)
+            for (batch_start, batch_end) in batch_idxs
+                # BLAS.gemm! can't handle sparse matrices, so cheaper
+                # to make it dense here
+                batch = full(X[:, batch_start:batch_end])
+                batch = convert(Array{T}, batch)
                 fit_batch!(crbm, batch, ctx)
             end
         end
