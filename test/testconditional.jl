@@ -7,7 +7,7 @@ using MNIST
 function conditional_smoke_test()
     X = rand(1000, 200)
     model = ConditionalRBM(Bernoulli, Bernoulli, 250, 150; steps=3)
-    fit(model, X; n_iter=10, n_gibbs=5)
+    fit(model, X; n_epochs=10, n_gibbs=5)
     forecast = predict(model, X[251:1000, 1]; n_gibbs=5)
 end
 
@@ -16,7 +16,7 @@ function run_mnist()
     input_size = round(Int, size(train_X, 1) / 2)
 
     model = ConditionalRBM(Bernoulli, Bernoulli, input_size, 500; steps=1)
-    fit(model, train_X; n_iter=10, n_gibbs=5)
+    fit(model, train_X; n_epochs=10, n_gibbs=5)
 
     test_X = _get_dataset(testdata()[1][:, 1:1000])
     corrupt_start = input_size + 1

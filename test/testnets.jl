@@ -10,7 +10,7 @@ layers = [("vis", GRBM(784, 256)),
           ("hid2", BernoulliRBM(100, 100))]
 dbn = DBN(layers)
 fit(dbn, X)
-transform(dbn, X)
+@assert size(transform(dbn, X)) == (100, 1000)
 
 dae = unroll(dbn)
 transform(dae, X)
