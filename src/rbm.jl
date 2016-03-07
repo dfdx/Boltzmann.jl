@@ -303,8 +303,9 @@ function fit_batch!{T}(rbm::RBM, X::Mat{T}, ctx = Dict())
 end
 
 
-function fit{T}(rbm::RBM{T}, X::Mat, ctx = Dict{Any,Any}())
+function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
+    ctx = copy(opts)
     check_options(ctx)
     n_examples = size(X, 2)
     batch_size = @get(ctx, :batch_size, 100)
