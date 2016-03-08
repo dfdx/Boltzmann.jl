@@ -29,6 +29,13 @@ function run_mnist()
     # values. In reality, this should be around ~0.05
     # and the likelihood should be move from >-60 to <-31
     @test mae < 0.1
+
+    @test !any(isnan, model.W)
+    @test !any(isnan, model.A)
+    @test !any(isnan, model.B)
+    @test !any(isinf, model.W)
+    @test !any(isinf, model.A)
+    @test !any(isinf, model.B)
 end
 
 function _get_dataset(X)
