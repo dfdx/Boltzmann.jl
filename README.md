@@ -32,9 +32,9 @@ Train RBM:
 
 (for more meaningful dataset see [MNIST Example](https://github.com/dfdx/Boltzmann.jl/blob/master/examples/mnistexample.jl))
 
-After model is fitted, you can **extract learned components** (a.k.a. weights): 
+After model is fitted, you can **extract learned coefficients** (a.k.a. weights): 
 
-    comps = components(rbm)
+    W = coef(rbm)
     
 **transform** data vectors into new higher-level representation (e.g. for further classification): 
 
