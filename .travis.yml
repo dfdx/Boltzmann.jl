@@ -9,7 +9,6 @@ notifications:
 before_install:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 script:
-  - julia --check-bounds=yes -e 'Pkg.clone(pwd())'
-  - julia --check-bounds=yes -e 'Pkg.test("Boltzmann"; coverage=true)'
+  - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("Boltzmann"; coverage=true)'
 after_success:
-  - julia -e 'cd(Pkg.dir("Boltzmann")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
+ - julia -e 'cd(Pkg.dir("Boltzmann")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
