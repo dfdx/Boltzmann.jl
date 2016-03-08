@@ -117,3 +117,29 @@ function split_evenly(n, len)
     end
     return parts
 end
+
+"""
+`tofinite!` takes an array and
+1. turns all NaNs to zeros
+2. turns all Infs and -Infs to the largets and
+   smallest representable values accordingly.
+3. turns all zeros to the smallest representable
+   non-zero values, if `nozeros` is true
+"""
+function tofinite!(x::Array; nozeros=false)
+    for i in eachindex(x)
+        if isnan(x[i])
+            x[i] = 0.0
+        elseif isinf(x[i])
+            if x[i] > 0.0
+                x[i] = prevfloat(x[i])
+            else
+                x[i] = nextfloat(x[i])
+            end
+        end
+
+        if x[i] == 0.0 && nozeros
+            x[i] = nextfloat(x[i])
+        end
+    end
+end

@@ -121,28 +121,12 @@ function free_energy{T}(rbm::RBM, vis::Mat{T})
     vb = sum(vis .* rbm.vbias, 1)
 
     fe_exp = 1 + exp(rbm.W * vis .+ rbm.hbias)
+    tofinite!(fe_exp; nozeros=true)
 
-    # Iterate over fe_exp and shift any 0s or Infs
-    # to avoid producing or propagating any Infs
-    # into the rest of the calculation.
-    for i in eachindex(fe_exp)
-        if fe_exp[i] == 0.0
-            fe_exp[i] = nextfloat(fe_exp[i])
-        end
-
-        if isinf(fe_exp[i])
-            if fe_exp[i] > 0.0
-                fe_exp[i] = prevfloat(fe_exp[i])
-            else
-                fe_exp[i] = nextfloat(fe_exp[i])
-            end
-        end
-    end
-
-    fe_log = log(fe_exp)
     Wx_b_log = sum(log(fe_exp), 1)
+    result = - vb - Wx_b_log
 
-    return - vb - Wx_b_log
+    return result
 end
 
 
@@ -160,10 +144,17 @@ function score_samples{T}(rbm::AbstractRBM, vis::Mat{T};
     for (i, j) in zip(idxs, 1:n_samples)
         vis_corrupted[i, j] = 1 - vis_corrupted[i, j]
     end
+
     fe = free_energy(rbm, vis)
     fe_corrupted = free_energy(rbm, vis_corrupted)
-    score_row =  n_feat * log(logistic(fe_corrupted - fe))
-    return map(Float64, squeeze(score_row', 2))
+    fe_diff = fe_corrupted - fe
+    tofinite!(fe_diff; nozeros=true)
+    score_row =  n_feat * log(logistic(fe_diff))
+
+    result = map(Float64, squeeze(score_row', 2))
+    tofinite!(result)
+
+    return result
 end
 
 function pseudo_likelihood(rbm::AbstractRBM, X)

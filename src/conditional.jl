@@ -232,7 +232,10 @@ end
 function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
     vb = sum(vis .* crbm.dyn_vbias, 1)
     Wx_b_log = sum(log(1 + exp(crbm.W * vis .+ crbm.dyn_hbias)), 1)
-    return - vb - Wx_b_log
+    result = - vb - Wx_b_log
+    tofinite!(result)
+
+    return result
 end
 
 
@@ -273,6 +276,7 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
         score = scorer(crbm, curr)
         report(reporter, crbm, epoch, epoch_time, score)
     end
+
     return crbm
 end
 
