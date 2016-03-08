@@ -14,4 +14,7 @@ before_install:
   - sudo apt-get install libpcre3-dev julia -y
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 script:
-  - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("Boltzmann")'
+  - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("Boltzmann"; coverage=true)'
+after_success:
+  - julia -e 'cd(Pkg.dir("Boltzmann")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+  - julia -e 'cd(Pkg.dir("Boltzmann")); Pkg.add("Coverage"); using Coverage; Coveralls.submit(process_folder())'
