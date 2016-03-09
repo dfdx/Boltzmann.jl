@@ -23,14 +23,46 @@ end
 
 ## types
 
-@runonce abstract AbstractRBM{T,V,H}
 
-@runonce type RBM{T,V,H} <: AbstractRBM{T,V,H}
-    W::Matrix{T}         # matrix of weights between vis and hid vars
-    vbias::Vector{T}     # biases for visible variables
-    hbias::Vector{T}     # biases for hidden variables
+@runonce begin
+
+    # TODO: why these dosctrings are not attached to these types?
+    """
+    Base type for all RBMs. Takes type parameters:
+
+     * T - type of RBM parameters (weights, biases, etc.), input and output.
+       By default, Float64 is used
+     * V - type of visible units
+     * H - type of hidden units
+    """
+    abstract AbstractRBM{T,V,H}
+
+    """
+    Restricted Boltzmann Machine, parametrized by element type T, visible
+    unit type V and hidden unit type H.
+    """
+    type RBM{T,V,H} <: AbstractRBM{T,V,H}
+        W::Matrix{T}         # matrix of weights between vis and hid vars
+        vbias::Vector{T}     # biases for visible variables
+        hbias::Vector{T}     # biases for hidden variables
+    end
+
 end
 
+"""
+Construct RBM. Parameters:
+
+ * T - type of RBM parameters (e.g. weights and biases; by default, Float64)
+ * V - type of visible units
+ * H - type of hidden units
+ * n_vis - number of visible units
+ * n_hid - number of hidden units
+
+Optional parameters:
+
+ * sigma - variance to use during parameter initialization
+
+"""
 function RBM(T::Type, V::Type, H::Type,
              n_vis::Int, n_hid::Int; sigma=0.01)
     RBM{T,V,H}(map(T, rand(Normal(0, sigma), (n_hid, n_vis))),
@@ -42,9 +74,12 @@ RBM(V::Type, H::Type, n_vis::Int, n_hid::Int; sigma=0.01) =
 
 
 # some well-known RBM kinds
+
+"""Same as RBM{Float64,Degenerate,Bernoulli}"""
 BernoulliRBM(n_vis::Int, n_hid::Int; sigma=0.01) =
     RBM(Float64, Degenerate, Bernoulli, n_vis, n_hid; sigma=sigma)
 
+"""Same as RBM{Float64,Gaussian,Bernoulli}"""
 GRBM(n_vis::Int, n_hid::Int; sigma=0.01) =
     RBM(Float64, Normal, Bernoulli, n_vis, n_hid; sigma=sigma)
 
@@ -164,13 +199,22 @@ end
 
 ## gradient calculation
 
+"""
+Contrastive divergence sampler. Options:
+
+ * n_gibbs - number of gibbs sampling loops (default: 1)
+"""
 function contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
     n_gibbs = @get(ctx, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
 end
 
+"""
+Persistent contrastive divergence sampler. Options:
 
+ * n_gibbs - number of gibbs sampling loops
+"""
 function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
     n_gibbs = @get(ctx, :n_gibbs, 1)
     persistent_chain = @get_array(ctx, :persistent_chain, size(vis), vis)
@@ -186,7 +230,17 @@ function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
     return v_pos, h_pos, v_neg, h_neg
 end
 
+"""
+Function for calculating gradient of negative log-likelihood of the data.
+Options:
 
+ * :sampler - sampler to use (default: persistent_contdiv)
+
+Returns:
+
+ * (dW, db, dc) - tuple of gradients for weights, visible and hidden biases,
+                  respectively
+"""
 function gradient_classic{T}(rbm::RBM, vis::Mat{T}, ctx::Dict)
     sampler = @get_or_create(ctx, :sampler, persistent_contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, ctx)
@@ -271,6 +325,16 @@ function update_weights!(rbm::RBM, dtheta::Tuple, ctx::Dict)
 end
 
 
+"""
+Update RBM parameters using provided tuple `dtheta = (dW, db, dc)` of
+parameter gradients. Before updating weights, following transformations
+are applied to gradients:
+
+ * learning rate (see `grad_apply_learning_rate!` for details)
+ * momentum (see `grad_apply_momentum!` for details)
+ * weight decay (see `grad_apply_weight_decay!` for details)
+ * sparsity (see `grad_apply_sparsity!` for details)
+"""
 function update_classic!{T}(rbm::RBM, X::Mat{T}, dtheta::Tuple, ctx::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are thus composable
@@ -294,6 +358,28 @@ function fit_batch!{T}(rbm::RBM, X::Mat{T}, ctx = Dict())
 end
 
 
+"""
+Fit RBM to data `X`. Options that can be provided in the `opts` dictionary:
+
+ * :n_epochs - number of full loops over data (default: 10)
+ * :batch_size - size of mini-batches to use (default: 100)
+ * :randomize - boolean, whether to shuffle batches or not (default: false)
+ * :gradient - function to use for calculating parameter gradients
+               (default: gradient_classic)
+ * :update - function to use to update weights using calculated gradient
+             (default: update_classic!)
+ * :scorer - function to calculate how good the model is at the moment
+             (default: pseudo_likelihood)
+ * :reporter - type for reporting intermediate results using `report()`
+               function (default: TextReporter)
+
+Each function can additionally take other options, see their
+docstrings/code for details.
+
+NOTE: this function is incremental, so one can, for example, run it for
+10 epochs, then inspect the model, then run it for 10 more epochs
+and check the difference. 
+"""
 function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
@@ -328,11 +414,13 @@ fit{T}(rbm::RBM, X::Mat{T}; opts...) = fit(rbm, X, Dict(opts))
 
 ## operations on learned RBM
 
+"""Base data X through trained RBM to obtain compressed representation"""
 function transform{T}(rbm::RBM, X::Mat{T})
     return hid_means(rbm, X)
 end
 
 
+"""Given trained RBM and sample of visible data, generate similar items"""
 function generate{T}(rbm::RBM, vis::Vec{T}; n_gibbs=1)
     return gibbs(rbm, reshape(vis, length(vis), 1); n_times=n_gibbs)[3]
 end
@@ -342,12 +430,20 @@ function generate{T}(rbm::RBM, X::Mat{T}; n_gibbs=1)
 end
 
 
+"""
+Get weight matrix of a trained RBM. Options:
+
+ * transpose - boolean, whether to transpose weight matrix (convenient)
+               or not (efficient). Default: true
+"""
 function coef(rbm::RBM; transpose=true)
     return if transpose rbm.W' else rbm.W end
 end
 # synonyms
 weights = coef
 
+"""Get biases of hidden units"""
 hbias(rbm::RBM) = rbm.hbias
 
+"""Get biases of visible units"""
 vbias(rbm::RBM) = rbm.vbias
