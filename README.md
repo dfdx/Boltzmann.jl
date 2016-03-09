@@ -3,6 +3,7 @@ Boltzmann.jl
 ============
 
 [![Build Status](https://travis-ci.org/dfdx/Boltzmann.jl.svg)](https://travis-ci.org/dfdx/Boltzmann.jl)
+[![codecov.io](http://codecov.io/github/dfdx/Boltzmann.jl/coverage.svg)](http://codecov.io/github/dfdx/Boltzmann.jl)
 
 Restricted Boltzmann machines and deep belief networks in Julia
 
