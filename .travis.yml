@@ -1,7 +1,7 @@
 language: julia
 os:
-  - linux
   - osx
+  - linux
 julia:
   - 0.4
 notifications:
@@ -9,6 +9,9 @@ notifications:
 before_install:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 script:
-  - julia -e 'Pkg.init(); Pkg.clone(pwd()); Pkg.test("Boltzmann"; coverage=true)'
+  - julia -e 'Pkg.init(); Pkg.clone(pwd())'
+  - export JULIA_TEST_GROUPS="unit integration" julia -e 'Pkg.test("Boltzmann"; coverage=true)'
+  - export JULIA_TEST_GROUPS="acceptance" julia -e 'Pkg.test("Boltzmann")'
+  - export JULIA_TEST_GROUPS="benchmark" julia -e 'Pkg.test("Boltzmann")'
 after_success:
- - julia -e 'cd(Pkg.dir("Boltzmann")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
+  - julia -e 'cd(Pkg.dir("Boltzmann")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
