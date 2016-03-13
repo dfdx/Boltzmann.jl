@@ -250,8 +250,9 @@ function fit_batch!{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict())
 end
 
 
-function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
+function fit{T}(crbm::ConditionalRBM, X::Mat{T}, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
+    ctx = copy(opts)
     n_examples = size(X, 2)
     batch_size = @get(ctx, :batch_size, 100)
     batch_idxs = split_evenly(n_examples, batch_size)

@@ -1,7 +1,8 @@
 
 module Boltzmann
 
-export RBM,
+export AbstractRBM,
+       RBM,
        BernoulliRBM,
        GRBM,
        ConditionalRBM,
@@ -20,7 +21,10 @@ export RBM,
        vbias,
        unroll,
        save_params,
-       load_params
+       load_params,
+       test,
+       compare,
+       benchmark
 
 include("core.jl")
 
