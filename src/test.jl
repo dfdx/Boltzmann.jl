@@ -132,7 +132,7 @@ function test{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), n_obs
     n_hid, n_vis = size(rbm.W)
     ctx = deepcopy(opts)
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
-    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.1)
+    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.3)
 
     if debug && isa(ctx[:reporter], TestReporter)
         ctx[:reporter].log = true
@@ -217,7 +217,7 @@ function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), de
     n_hid, n_vis = size(rbm.W)
 
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
-    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.1)
+    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.3)
 
     if !isa(rbm, RBM)
         push!(models, RBM(T, V, H, n_vis, n_hid))
@@ -301,7 +301,7 @@ function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), 
     ctx = deepcopy(opts)
     n_hid, n_vis = size(rbm.W)
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
-    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.1)
+    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.3)
 
     if debug && isa(ctx[:reporter], TestReporter)
         ctx[:reporter].log = true
@@ -312,14 +312,14 @@ function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), 
     for X in (DX, SX)
         # For now we're just benchmarking the fit method
         # but we could also get transform, generate, etc
-        fit() = fit(rbm, X, ctx)
-        transform() = transform(rbm, X)
-        generate() = generate(rbm, X)
+        fit_func() = fit(rbm, X, ctx)
+        trans_func() = transform(rbm, X)
+        gen_func() = generate(rbm, X)
 
-        df = vcat(results, Benchmark.benchmark(fit, "fit", "$(typeof(rbm).name):$(typeof(X).name)", 10))
-        df = vcat(results, Benchmark.benchmark(transform, "transform", "$(typeof(rbm).name):$(typeof(X).name)", 10))
-        df = vcat(results, Benchmark.benchmark(generate, "generate", "$(typeof(rbm).name):$(typeof(X).name)", 10))
+        results = vcat(results, Benchmark.benchmark(fit_func, "fit", "$(typeof(rbm).name):$(typeof(X).name)", 10))
+        results = vcat(results, Benchmark.benchmark(trans_func, "transform", "$(typeof(rbm).name):$(typeof(X).name)", 10))
+        results = vcat(results, Benchmark.benchmark(gen_func, "generate", "$(typeof(rbm).name):$(typeof(X).name)", 10))
     end
 
-    return df
+    return results
 end
