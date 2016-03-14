@@ -258,8 +258,8 @@ end
 
 ## updating
 
-function grad_apply_learning_rate!{T}(rbm::RBM{T}, X::Mat{T},
-                                      dtheta::Tuple, ctx::Dict)
+function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat,
+                                          dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
     lr = T(@get(ctx, :lr, 0.1))
     # same as: dW *= lr
@@ -269,7 +269,7 @@ function grad_apply_learning_rate!{T}(rbm::RBM{T}, X::Mat{T},
 end
 
 
-function grad_apply_momentum!{T}(rbm::RBM{T}, X::Mat{T},
+function grad_apply_momentum!{T}(rbm::RBM{T}, X::Mat,
                                  dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
@@ -378,7 +378,7 @@ docstrings/code for details.
 
 NOTE: this function is incremental, so one can, for example, run it for
 10 epochs, then inspect the model, then run it for 10 more epochs
-and check the difference.
+and check the difference. 
 """
 function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
@@ -399,7 +399,7 @@ function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
                 batch = full(X[:, batch_start:batch_end])
-                batch = convert(Array{T}, batch)
+                batch = ensure_type(T, batch)
                 fit_batch!(rbm, batch, ctx)
             end
         end
@@ -415,18 +415,18 @@ fit(rbm::RBM, X::Mat; opts...) = fit(rbm, X, Dict(opts))
 ## operations on learned RBM
 
 """Base data X through trained RBM to obtain compressed representation"""
-function transform(rbm::RBM, X::Mat)
-    return hid_means(rbm, X)
+function transform{T}(rbm::RBM{T}, X::Mat)
+    return hid_means(rbm, ensure_type(T, X))
 end
 
 
 """Given trained RBM and sample of visible data, generate similar items"""
-function generate(rbm::RBM, vis::Vec; n_gibbs=1)
-    return gibbs(rbm, reshape(vis, length(vis), 1); n_times=n_gibbs)[3]
+function generate{T}(rbm::RBM{T}, vis::Vec; n_gibbs=1)
+    return gibbs(rbm, reshape(ensure_type(T, vis), length(vis), 1); n_times=n_gibbs)[3]
 end
 
-function generate(rbm::RBM, X::Mat; n_gibbs=1)
-    return gibbs(rbm, X; n_times=n_gibbs)[3]
+function generate{T}(rbm::RBM{T}, X::Mat; n_gibbs=1)
+    return gibbs(rbm, ensure_type(T, X); n_times=n_gibbs)[3]
 end
 
 
