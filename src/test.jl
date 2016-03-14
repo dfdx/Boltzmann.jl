@@ -60,13 +60,13 @@ function DefaultContext()
     return Dict(
         :weight_decay_kind => :l2,
         :weight_decay_rate => 0.001,
-        :sparsity_cost => 0.01,
+        :sparsity_cost => 0.001,
         :sparsity_target => 0.02,
         :lr => 0.1,
         :momentum => 0.9,
         :batch_size => 100,
         :n_epochs => 10,
-        :n_gibbs => 5,
+        :n_gibbs => 1,
         :reporter => TestReporter()
     )
 end
