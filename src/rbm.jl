@@ -125,19 +125,19 @@ function sample{T}(::Type{Gaussian}, means::Mat{T})
 end
 
 
-function sample_hiddens{T,V,H}(rbm::AbstractRBM{T,V,H}, vis::Mat{T})
+function sample_hiddens{T,V,H}(rbm::AbstractRBM{T,V,H}, vis::Mat)
     means = hid_means(rbm, vis)
     return sample(H, means)
 end
 
 
-function sample_visibles{T,V,H}(rbm::AbstractRBM{T,V,H}, hid::Mat{T})
+function sample_visibles{T,V,H}(rbm::AbstractRBM{T,V,H}, hid::Mat)
     means = vis_means(rbm, hid)
     return sample(V, means)
 end
 
 
-function gibbs{T}(rbm::AbstractRBM, vis::Mat{T}; n_times=1)
+function gibbs(rbm::AbstractRBM, vis::Mat; n_times=1)
     v_pos = vis
     h_pos = sample_hiddens(rbm, v_pos)
     v_neg = sample_visibles(rbm, h_pos)
@@ -152,7 +152,7 @@ end
 
 ## scoring
 
-function free_energy{T}(rbm::RBM, vis::Mat{T})
+function free_energy(rbm::RBM, vis::Mat)
     vb = sum(vis .* rbm.vbias, 1)
 
     fe_exp = 1 + exp(rbm.W * vis .+ rbm.hbias)
@@ -165,7 +165,7 @@ function free_energy{T}(rbm::RBM, vis::Mat{T})
 end
 
 
-function score_samples{T}(rbm::AbstractRBM, vis::Mat{T};
+function score_samples(rbm::AbstractRBM, vis::Mat;
                           sample_size=10000)
     if issparse(vis)
         # sparse matrices may be infeasible for this operation
@@ -204,7 +204,7 @@ Contrastive divergence sampler. Options:
 
  * n_gibbs - number of gibbs sampling loops (default: 1)
 """
-function contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
+function contdiv(rbm::AbstractRBM, vis::Mat, ctx::Dict)
     n_gibbs = @get(ctx, :n_gibbs, 1)
     v_pos, h_pos, v_neg, h_neg = gibbs(rbm, vis, n_times=n_gibbs)
     return v_pos, h_pos, v_neg, h_neg
@@ -215,7 +215,7 @@ Persistent contrastive divergence sampler. Options:
 
  * n_gibbs - number of gibbs sampling loops
 """
-function persistent_contdiv{T}(rbm::AbstractRBM, vis::Mat{T}, ctx::Dict)
+function persistent_contdiv(rbm::AbstractRBM, vis::Mat, ctx::Dict)
     n_gibbs = @get(ctx, :n_gibbs, 1)
     persistent_chain = @get_array(ctx, :persistent_chain, size(vis), vis)
     if size(persistent_chain) != size(vis)
@@ -258,10 +258,10 @@ end
 
 ## updating
 
-function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                          dtheta::Tuple, ctx::Dict)
+function grad_apply_learning_rate!{T}(rbm::RBM{T}, X::Mat{T},
+                                      dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
-    lr = @get(ctx, :lr, T(0.1))
+    lr = T(@get(ctx, :lr, 0.1))
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
     scal!(length(db), lr, db, 1)
@@ -269,8 +269,8 @@ function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
 end
 
 
-function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                     dtheta::Tuple, ctx::Dict)
+function grad_apply_momentum!{T}(rbm::RBM{T}, X::Mat{T},
+                                 dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
     dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
@@ -279,8 +279,8 @@ function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
 end
 
 
-function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                         dtheta::Tuple, ctx::Dict)
+function grad_apply_weight_decay!(rbm::RBM, X::Mat,
+                                  dtheta::Tuple, ctx::Dict)
     # The decay penalty should drive all weights toward
     # zero by some small amount on each update.
     dW, db, dc = dtheta
@@ -298,8 +298,8 @@ function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
 
 end
 
-function grad_apply_sparsity!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
-                                         dtheta::Tuple, ctx::Dict)
+function grad_apply_sparsity!(rbm::RBM, X::Mat,
+                              dtheta::Tuple, ctx::Dict)
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
     # than the expected (hence why it isn't squared or the abs())
@@ -335,7 +335,7 @@ are applied to gradients:
  * weight decay (see `grad_apply_weight_decay!` for details)
  * sparsity (see `grad_apply_sparsity!` for details)
 """
-function update_classic!{T}(rbm::RBM, X::Mat{T}, dtheta::Tuple, ctx::Dict)
+function update_classic!(rbm::RBM, X::Mat, dtheta::Tuple, ctx::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are thus composable
     grad_apply_learning_rate!(rbm, X, dtheta, ctx)
@@ -349,7 +349,7 @@ end
 
 ## fitting
 
-function fit_batch!{T}(rbm::RBM, X::Mat{T}, ctx = Dict())
+function fit_batch!(rbm::RBM, X::Mat, ctx = Dict())
     grad = @get_or_create(ctx, :gradient, gradient_classic)
     upd = @get_or_create(ctx, :update, update_classic!)
     dtheta = grad(rbm, X, ctx)
@@ -378,7 +378,7 @@ docstrings/code for details.
 
 NOTE: this function is incremental, so one can, for example, run it for
 10 epochs, then inspect the model, then run it for 10 more epochs
-and check the difference. 
+and check the difference.
 """
 function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
@@ -409,23 +409,23 @@ function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     return rbm
 end
 
-fit{T}(rbm::RBM, X::Mat{T}; opts...) = fit(rbm, X, Dict(opts))
+fit(rbm::RBM, X::Mat; opts...) = fit(rbm, X, Dict(opts))
 
 
 ## operations on learned RBM
 
 """Base data X through trained RBM to obtain compressed representation"""
-function transform{T}(rbm::RBM, X::Mat{T})
+function transform(rbm::RBM, X::Mat)
     return hid_means(rbm, X)
 end
 
 
 """Given trained RBM and sample of visible data, generate similar items"""
-function generate{T}(rbm::RBM, vis::Vec{T}; n_gibbs=1)
+function generate(rbm::RBM, vis::Vec; n_gibbs=1)
     return gibbs(rbm, reshape(vis, length(vis), 1); n_times=n_gibbs)[3]
 end
 
-function generate{T}(rbm::RBM, X::Mat{T}; n_gibbs=1)
+function generate(rbm::RBM, X::Mat; n_gibbs=1)
     return gibbs(rbm, X; n_times=n_gibbs)[3]
 end
 

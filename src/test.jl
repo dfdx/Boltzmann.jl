@@ -128,8 +128,13 @@ Optional:
 NOTE: Only using dense arrays for the dataset cause the conditional rbm doesn't support
 sparse ones yet.
 """
-function test{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), n_obs=1000, debug=false)
+function test{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, n_obs=1000, debug=false)
     n_hid, n_vis = size(rbm.W)
+
+    if input_size > 0
+        n_vis = input_size
+    end
+
     ctx = deepcopy(opts)
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
     SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.3)
@@ -209,12 +214,16 @@ Returns: a DataFrame of the results
 NOTE: For now we're only using dense matrices cause the conditional rbm doesn't
 work with sparse ones.
 """
-function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), debug=false, n_obs=1000)
+function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, debug=false, n_obs=1000)
     @eval using DataFrames
 
     ctx = deepcopy(opts)
     models = AbstractRBM[rbm]
     n_hid, n_vis = size(rbm.W)
+
+    if input_size > 0
+        n_vis = input_size
+    end
 
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
     SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.3)
@@ -266,8 +275,12 @@ Optional:
 
 Returns: a DataFrame of the results
 """
-function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; n_obs=1000)
+function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; input_size=-1, n_obs=1000)
     n_hid, n_vis = size(rbm.W)
+    if input_size > 0
+        n_vis = input_size
+    end
+
     X = generate_dataset(T, n_vis; n_obs=n_obs)
     args = [map(ctx -> (X, opt), options)]
     return compare(fit, [rbm, deepcopy(rbm)], args)
@@ -292,7 +305,7 @@ Optional:
 
 Returns: a DataFrame of the results
 """
-function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), debug=false, n_obs=1000)
+function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, debug=false, n_obs=1000)
     @eval begin
         using DataFrames
         import Benchmark
@@ -300,6 +313,11 @@ function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), 
 
     ctx = deepcopy(opts)
     n_hid, n_vis = size(rbm.W)
+
+    if input_size > 0
+        n_vis = input_size
+    end
+
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
     SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.3)
 
