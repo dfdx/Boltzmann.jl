@@ -79,8 +79,8 @@ end
 function split_vis{T}(crbm::ConditionalRBM, vis::Mat{T})
     vis_size = length(crbm.vbias)
 
-    curr = sub(vis, 1:vis_size, :)
-    cond = sub(vis, (vis_size + 1):(vis_size + size(crbm.A, 2)), :)
+    curr = vis[1:vis_size, :]
+    cond = vis[(vis_size + 1):(vis_size + size(crbm.A, 2)), :]
 
     return curr, cond
 end
@@ -274,7 +274,10 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, opts = Dict{Any,Any}())
         end
         curr, cond = split_vis(crbm, X)
         dynamic_biases!(crbm, cond)
-        score = scorer(crbm, curr)
+
+        # We convert to full, to avoid changing the the n_obs if
+        # X is a sparse matrix
+        score = scorer(crbm, full(curr))
         report(reporter, crbm, epoch, epoch_time, score)
     end
 

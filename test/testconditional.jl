@@ -49,6 +49,7 @@ if :acceptance in TEST_GROUPS
         # less than the amount of noise added to the condition
         # values. In reality, this should be around ~0.05
         # and the likelihood should be move from >-60 to <-31
+        println("MAE = $mae")
         @test mae < 0.1
 
         @test !any(isnan, model.W)

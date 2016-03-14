@@ -21,10 +21,7 @@ export AbstractRBM,
        vbias,
        unroll,
        save_params,
-       load_params,
-       test,
-       compare,
-       benchmark
+       load_params
 
 include("core.jl")
 

@@ -30,6 +30,11 @@ will be printed.
 """
 function report(r::TestReporter, rbm::AbstractRBM,
                 epoch::Int, epoch_time::Float64, score::Float64)
+    if epoch == 1
+        r.ratios = Array{Float64}(0)
+        r.prev = NaN
+    end
+
     if !isnan(r.prev)
         # We're ratio test, also known as D'Alembert's criterion
         ratio = r.prev == 0.0 ? abs(score / nextfloat(r.prev)) : abs(score / r.prev)
@@ -48,18 +53,23 @@ Simply return true or false as to whether the mean ratio is less than 1
 """
 converged(r::TestReporter) = mean(r.ratios) < 1.0
 
-const DEFAULT_CONTEXT = Dict(
-    :weight_decay_kind => :l2,
-    :weight_decay_rate => 0.001,
-    :sparsity_cost => 0.01,
-    :sparsity_target => 0.02,
-    :lr => 0.1,
-    :momentum => 0.9,
-    :batch_size => 100,
-    :n_epochs => 10,
-    :n_gibbs => 5,
-    :reporter => TestReporter()
-)
+"""
+Simply returns a DefaultContext Dict.
+"""
+function DefaultContext()
+    return Dict(
+        :weight_decay_kind => :l2,
+        :weight_decay_rate => 0.001,
+        :sparsity_cost => 0.01,
+        :sparsity_target => 0.02,
+        :lr => 0.1,
+        :momentum => 0.9,
+        :batch_size => 100,
+        :n_epochs => 10,
+        :n_gibbs => 5,
+        :reporter => TestReporter()
+    )
+end
 
 """
 Generates synthetic random datasets with several modifiable properties.
@@ -110,7 +120,7 @@ Args:
 * rbm::AbstractRBM - the rbm to test
 
 Optional:
-* ctx::Dict - an alternate context to use when calling `fit`. (default=DEFAULT_CONTEXT)
+* opts::Dict - an alternate context to use when calling `fit`. (default=DEFAULT_CONTEXT)
 * n_obs::Int - the number of observations to generate for the synthetic datasets. (default=1000)
 * debug::Bool - whether or not to print each epoch. (default=false)
                 Only applies if the reporter in `ctx` is `TestReporter`
@@ -118,9 +128,9 @@ Optional:
 NOTE: Only using dense arrays for the dataset cause the conditional rbm doesn't support
 sparse ones yet.
 """
-function test{T,V,H}(rbm::AbstractRBM{T,V,H}; ctx::Dict=DEFAULT_CONTEXT, n_obs=1000, debug=false)
+function test{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), n_obs=1000, debug=false)
     n_hid, n_vis = size(rbm.W)
-
+    ctx = deepcopy(opts)
     DX = generate_dataset(T, n_vis; n_obs=n_obs)
     SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.1)
 
@@ -128,7 +138,7 @@ function test{T,V,H}(rbm::AbstractRBM{T,V,H}; ctx::Dict=DEFAULT_CONTEXT, n_obs=1
         ctx[:reporter].log = true
     end
 
-    for X in (DX,)
+    for X in (DX, SX)
         info("Testing against $(typeof(X).name)")
         info("Testing fit")
         fit(rbm, X, ctx)
@@ -177,7 +187,7 @@ function compare{R<:AbstractRBM, T<:Tuple}(func::Function, rbms::Array{R,1}, arg
         names[i] = typeof(rbms[i]).name
     end
 
-    df = Benchmark.compare(funcs, 2)
+    df = Benchmark.compare(funcs, 1)
     df[:Function] = fill(last(split(string(func), ".")), length(funcs))
     df[:RBM] = names
 
@@ -199,9 +209,10 @@ Returns: a DataFrame of the results
 NOTE: For now we're only using dense matrices cause the conditional rbm doesn't
 work with sparse ones.
 """
-function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; n_obs=1000)
+function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), debug=false, n_obs=1000)
     @eval using DataFrames
 
+    ctx = deepcopy(opts)
     models = AbstractRBM[rbm]
     n_hid, n_vis = size(rbm.W)
 
@@ -220,18 +231,21 @@ function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; n_obs=1000)
     n = length(models)
     results = DataFrame()
 
-    for X in (DX,)
+    if debug && isa(ctx[:reporter], TestReporter)
+        ctx[:reporter].log = true
+    end
+
+    for X in (DX, SX)
+        fit_result = compare(fit, models, fill((X, deepcopy(ctx)), n))
+        trans_result = compare(transform, models, fill((X,), n))
+
         tmp_result = vcat(
-            compare(fit, models, fill((X, DEFAULT_CONTEXT), n)),
-            compare(transform, models, fill((X,), n))
+            fit_result,
+            trans_result
         )
-        tmp_result = hcat(
-            tmp_result,
-            DataFrame(
-                Input = fill(typeof(X).name, n * 2),
-                Type = fill(T, n * 2)
-            )
-        )
+
+        tmp_result[:Input] = fill(typeof(X).name, n * 2)
+        tmp_result[:Type] = fill(T, n * 2)
         results = vcat(results, tmp_result)
     end
 
@@ -245,66 +259,67 @@ specified in the context.
 
 Args:
 * rbm::AbstractRBM - the rbm to test
-* contexts::Dict... - the contexts to compare
+* options::Dict... - the contexts to compare
 
 Optional:
 * n_obs::Int - the number of observations to generate in the synthetic dataset.
 
 Returns: a DataFrame of the results
 """
-function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, contexts::Dict...; n_obs=1000)
+function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; n_obs=1000)
     n_hid, n_vis = size(rbm.W)
     X = generate_dataset(T, n_vis; n_obs=n_obs)
-    args = [map(ctx -> (X, ctx), contexts)]
+    args = [map(ctx -> (X, opt), options)]
     return compare(fit, [rbm, deepcopy(rbm)], args)
 end
 
 
 """
-Runs a series of basic smoke and benchmark tests on the interface of any RBM or Net.
+Runs a series of basic smoke and benchmark tests on the interface of any RBM.
 
 Default methods tested:
 
 * `fit(model, X)`
 * `transform(model, X)`
-* `generate(model, X)` (RBM only)
+* `generate(model, X)`
 
 Args:
 * model::Union{AbstractRBM, Net} - the model to test
-* X::Mat - the input data passed to the visible units
-* ctx::Dict - the context passed when running fit
 
 Optional:
-* benchmarks::DataFrame - pass in an existing benchmarks dataframe to append to
-* funcs::Dict - extra functions to benchmark against.
-    ex) `gen_func() = generate(model, X); Dict("generate" => gen_func)`
+* opts::Dict - the context passed when running fit. (default=DEFAULT_CONTEXT)
+* n_obs::Int - total number of observations in generated dataset (default=1000)
+
+Returns: a DataFrame of the results
 """
-function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}, X::Mat{T}, ctx::Dict; funcs::Dict=Dict())
-    error("Not yet implemented.")
-    # @eval begin
-    #     using DataFrames
-    #     import Benchmark
-    # end
+function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), debug=false, n_obs=1000)
+    @eval begin
+        using DataFrames
+        import Benchmark
+    end
 
-    # # For now we're just benchmarking the fit method
-    # # but we could also get transform, generate, etc
-    # fit() = fit(rbm, X, ctx)
-    # transform() = transform(rbm, X)
+    ctx = deepcopy(opts)
+    n_hid, n_vis = size(rbm.W)
+    DX = generate_dataset(T, n_vis; n_obs=n_obs)
+    SX = generate_dataset(T, n_vis; n_obs=n_obs, sparsity=0.1)
 
-    # df = DataFrame()
-    # result = Benchmark.benchmark(fit, "fit", "$(typof(rbm)):$(typeof(X))", 10)
+    if debug && isa(ctx[:reporter], TestReporter)
+        ctx[:reporter].log = true
+    end
 
-    # if isempty(db)
-    #     df = result
-    # else
-    #     df = vcat(df, result)
-    # end
+    results = DataFrame()
 
-    # df = vcat(df, Benchmark.benchmark(transform, "transform", "$(typeof(rbm)):$(typeof(X))", 10))
+    for X in (DX, SX)
+        # For now we're just benchmarking the fit method
+        # but we could also get transform, generate, etc
+        fit() = fit(rbm, X, ctx)
+        transform() = transform(rbm, X)
+        generate() = generate(rbm, X)
 
-    # for (name, f) in funcs
-    #     df = vcat(df, Benchmark.benchmark(f, name, "$(typeof(rbm)):$(typeof(X))", 10))
-    # end
+        df = vcat(results, Benchmark.benchmark(fit, "fit", "$(typeof(rbm).name):$(typeof(X).name)", 10))
+        df = vcat(results, Benchmark.benchmark(transform, "transform", "$(typeof(rbm).name):$(typeof(X).name)", 10))
+        df = vcat(results, Benchmark.benchmark(generate, "generate", "$(typeof(rbm).name):$(typeof(X).name)", 10))
+    end
 
-    # return df
+    return df
 end
