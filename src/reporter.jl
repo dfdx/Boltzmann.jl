@@ -13,4 +13,3 @@ function report(r::TextReporter, dbn::DBN, epoch::Int, layer::Int)
     println("[Layer $layer] Starting epoch $epoch")
 end
 
-

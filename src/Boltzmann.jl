@@ -1,7 +1,8 @@
 
 module Boltzmann
 
-export RBM,
+export AbstractRBM,
+       RBM,
        BernoulliRBM,
        GRBM,
        ConditionalRBM,

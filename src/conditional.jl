@@ -76,35 +76,35 @@ function Base.show{T,V,H}(io::IO, crbm::ConditionalRBM{T,V,H})
 end
 
 
-function split_vis{T}(crbm::ConditionalRBM, vis::Mat{T})
+function split_vis(crbm::ConditionalRBM, vis::Mat)
     vis_size = length(crbm.vbias)
 
-    curr = sub(vis, 1:vis_size, :)
-    cond = sub(vis, (vis_size + 1):(vis_size + size(crbm.A, 2)), :)
+    curr = vis[1:vis_size, :]
+    cond = vis[(vis_size + 1):(vis_size + size(crbm.A, 2)), :]
 
     return curr, cond
 end
 
 
-function dynamic_biases!{T}(crbm::ConditionalRBM, cond::Mat{T})
+function dynamic_biases!(crbm::ConditionalRBM, cond::Mat)
     crbm.dyn_vbias = crbm.A * cond .+ crbm.vbias
     crbm.dyn_hbias = crbm.B * cond .+ crbm.hbias
 end
 
 
-function hid_means{T}(crbm::ConditionalRBM, vis::Mat{T})
+function hid_means(crbm::ConditionalRBM, vis::Mat)
     p = crbm.W * vis .+ crbm.dyn_hbias
     return logistic(p)
 end
 
 
-function vis_means{T}(crbm::ConditionalRBM, hid::Mat{T})
+function vis_means(crbm::ConditionalRBM, hid::Mat)
     p = crbm.W' * hid .+ crbm.dyn_vbias
     return logistic(p)
 end
 
 
-function gradient_classic{T}(crbm::ConditionalRBM, X::Mat{T},
+function gradient_classic{T}(crbm::ConditionalRBM{T}, X::Mat{T},
                           ctx::Dict)
     vis, cond = split_vis(crbm, X)
     sampler = @get_or_create(ctx, :sampler, persistent_contdiv)
@@ -135,11 +135,11 @@ function gradient_classic{T}(crbm::ConditionalRBM, X::Mat{T},
 end
 
 
-function grad_apply_learning_rate!{T,V,H}(crbm::ConditionalRBM{T,V,H},
-                                          X::Mat{T},
-                                          dtheta::Tuple, ctx::Dict)
+function grad_apply_learning_rate!{T}(crbm::ConditionalRBM{T},
+                                      X::Mat{T},
+                                      dtheta::Tuple, ctx::Dict)
     dW, dA, dB, db, dc = dtheta
-    lr = @get(ctx, :lr, T(0.1))
+    lr = T(@get(ctx, :lr, 0.1))
     # same as: dW *= lr
     scal!(length(dW), lr, dW, 1)
     scal!(length(dA), lr, dA, 1)
@@ -149,8 +149,8 @@ function grad_apply_learning_rate!{T,V,H}(crbm::ConditionalRBM{T,V,H},
 end
 
 
-function grad_apply_momentum!{T,V,H}(crbm::ConditionalRBM{T,V,H}, X::Mat{T},
-                                     dtheta::Tuple, ctx::Dict)
+function grad_apply_momentum!{T}(crbm::ConditionalRBM{T}, X::Mat{T},
+                                 dtheta::Tuple, ctx::Dict)
     dW, dA, dB, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
     dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
@@ -159,9 +159,9 @@ function grad_apply_momentum!{T,V,H}(crbm::ConditionalRBM{T,V,H}, X::Mat{T},
 end
 
 
-function grad_apply_weight_decay!{T,V,H}(rbm::ConditionalRBM{T,V,H},
-                                         X::Mat{T},
-                                         dtheta::Tuple, ctx::Dict)
+function grad_apply_weight_decay!(rbm::ConditionalRBM,
+                                     X::Mat,
+                                     dtheta::Tuple, ctx::Dict)
     # The decay penalty should drive all weights toward
     # zero by some small amount on each update.
     dW, dA, dB, db, dc = dtheta
@@ -183,8 +183,8 @@ function grad_apply_weight_decay!{T,V,H}(rbm::ConditionalRBM{T,V,H},
 end
 
 
-function grad_apply_sparsity!{T,V,H}(rbm::ConditionalRBM{T,V,H}, X::Mat{T},
-                                     dtheta::Tuple, ctx::Dict)
+function grad_apply_sparsity!(rbm::ConditionalRBM, X::Mat,
+                                 dtheta::Tuple, ctx::Dict)
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
     # than the expected (hence why it isn't squared or the abs())
@@ -216,7 +216,7 @@ function update_weights!(crbm::ConditionalRBM, dtheta::Tuple, ctx::Dict)
 end
 
 
-function update_classic!{T}(crbm::ConditionalRBM, X::Mat{T},
+function update_classic!(crbm::ConditionalRBM, X::Mat,
                             dtheta::Tuple, ctx::Dict)
     # apply gradient updaters. note, that updaters all have
     # the same signature and are thus composable
@@ -229,7 +229,7 @@ function update_classic!{T}(crbm::ConditionalRBM, X::Mat{T},
 end
 
 
-function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
+function free_energy(crbm::ConditionalRBM, vis::Mat)
     vb = sum(vis .* crbm.dyn_vbias, 1)
     Wx_b_log = sum(log(1 + exp(crbm.W * vis .+ crbm.dyn_hbias)), 1)
     result = - vb - Wx_b_log
@@ -239,7 +239,7 @@ function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
 end
 
 
-function fit_batch!{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict())
+function fit_batch!(crbm::ConditionalRBM, X::Mat, ctx = Dict())
     grad = @get_or_create(ctx, :gradient, gradient_classic)
     upd = @get_or_create(ctx, :update, update_classic!)
     curr, cond = split_vis(crbm, X)
@@ -250,8 +250,9 @@ function fit_batch!{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict())
 end
 
 
-function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
+function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
+    ctx = copy(opts)
     n_examples = size(X, 2)
     batch_size = @get(ctx, :batch_size, 100)
     batch_idxs = split_evenly(n_examples, batch_size)
@@ -273,34 +274,37 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
         end
         curr, cond = split_vis(crbm, X)
         dynamic_biases!(crbm, cond)
-        score = scorer(crbm, curr)
+
+        # We convert to full, to avoid changing the the n_obs if
+        # X is a sparse matrix
+        score = scorer(crbm, full(curr))
         report(reporter, crbm, epoch, epoch_time, score)
     end
 
     return crbm
 end
 
-fit{T}(crbm::ConditionalRBM, X::Mat{T}; opts...) = fit(crbm, X, Dict(opts))
+fit(crbm::ConditionalRBM, X::Mat; opts...) = fit(crbm, X, Dict(opts))
 
 
-function transform{T}(crbm::ConditionalRBM, X::Mat{T})
+function transform(crbm::ConditionalRBM, X::Mat)
     curr, cond = split_vis(crbm, X)
     dynamic_biases!(crbm, cond)
     return hid_means(crbm, curr)
 end
 
 
-function generate{T}(crbm::ConditionalRBM, X::Mat{T}; n_gibbs=1)
+function generate(crbm::ConditionalRBM, X::Mat; n_gibbs=1)
     curr, cond = split_vis(crbm, X)
     dynamic_biases!(crbm, cond)
     return gibbs(crbm, curr; n_times=n_gibbs)[3]
 end
 
-generate{T}(crbm::ConditionalRBM, vis::Vec{T}; n_gibbs=1) =
+generate(crbm::ConditionalRBM, vis::Vec; n_gibbs=1) =
     generate(crbm, reshape(vis, length(vis), 1); n_gibbs=n_gibbs)
 
 
-function predict{T}(crbm::ConditionalRBM, cond::Mat{T}; n_gibbs=1)
+function predict(crbm::ConditionalRBM, cond::Mat; n_gibbs=1)
     @assert size(cond, 1) == size(crbm.A, 2)
 
     curr = sub(cond, 1:length(crbm.vbias), :)
@@ -309,10 +313,10 @@ function predict{T}(crbm::ConditionalRBM, cond::Mat{T}; n_gibbs=1)
     return generate(crbm, vis; n_gibbs=n_gibbs)
 end
 
-predict{T}(crbm::ConditionalRBM, cond::Vec{T}; n_gibbs=1) =
+predict(crbm::ConditionalRBM, cond::Vec; n_gibbs=1) =
     predict(crbm, reshape(cond, length(cond), 1); n_gibbs=n_gibbs)
 
 
-predict{T}(crbm::ConditionalRBM, vis::Vec{T}, cond::Vec{T}; n_gibbs=1) =
+predict(crbm::ConditionalRBM, vis::Vec, cond::Vec; n_gibbs=1) =
     predict(crbm, reshape(vis, length(vis), 1),
             reshape(cond, length(cond), 1); n_gibbs=n_gibbs)

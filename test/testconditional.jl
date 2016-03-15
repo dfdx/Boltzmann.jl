@@ -24,10 +24,8 @@ end
 
 if :integration in TEST_GROUPS
     @testset "Conditional RBM Integration" begin
-        X = rand(1000, 200)
         model = ConditionalRBM(Bernoulli, Bernoulli, 250, 150; steps=3)
-        fit(model, X; n_epochs=10, n_gibbs=5)
-        forecast = predict(model, X[251:1000, 1]; n_gibbs=5)
+        Boltzmann.test(model; input_size=1000, debug=true)
     end
 end
 
@@ -49,14 +47,8 @@ if :acceptance in TEST_GROUPS
         # less than the amount of noise added to the condition
         # values. In reality, this should be around ~0.05
         # and the likelihood should be move from >-60 to <-31
+        println("MAE = $mae")
         @test mae < 0.1
-
-        @test !any(isnan, model.W)
-        @test !any(isnan, model.A)
-        @test !any(isnan, model.B)
-        @test !any(isinf, model.W)
-        @test !any(isinf, model.A)
-        @test !any(isinf, model.B)
     end
 end
 
@@ -65,29 +57,18 @@ if :benchmark in TEST_GROUPS
         n_vis = 250
         n_cond = 750
         n_hid = 200
-        n_obs = 300
 
-        df = DataFrame()
-
+        results = DataFrame()
         for T in [Float32, Float64]
-            X = rand(T, n_vis + n_cond, n_obs)
-            rbm = ConditionalRBM(T, Bernoulli, Bernoulli, n_vis, n_hid, n_cond)
-
-            # For now we're just benchmarking the fit method
-            # but we could also get transform, generate, etc
-            fit_func() = fit(rbm, X)
-            result = benchmark(fit_func, "fit", "$(typeof(X))", 10)
-
-            if isempty(df)
-                df = result
-            else
-                df = vcat(df, result)
-            end
+            model = ConditionalRBM(T, Bernoulli, Bernoulli, n_vis, n_hid, n_cond)
+            df = Boltzmann.benchmark(model; input_size=1000, debug=true)
+            df[:Type] = fill(T, size(df, 1))
+            results = vcat(results, df)
         end
 
         # For now just print the output, but we may want load a CSV containing
         # existing master benchmarks and compare the two here.
-        println(df)
+        println(results)
     end
 end
 
