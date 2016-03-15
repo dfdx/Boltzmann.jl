@@ -63,7 +63,7 @@ if :benchmark in TEST_GROUPS
             model = ConditionalRBM(T, Bernoulli, Bernoulli, n_vis, n_hid, n_cond)
             df = Boltzmann.benchmark(model; input_size=1000, debug=true)
             df[:Type] = fill(T, size(df, 1))
-            vcat(results, df)
+            results = vcat(results, df)
         end
 
         # For now just print the output, but we may want load a CSV containing

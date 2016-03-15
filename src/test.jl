@@ -65,7 +65,7 @@ function DefaultContext()
         :lr => 0.1,
         :momentum => 0.9,
         :batch_size => 100,
-        :n_epochs => 10,
+        :n_epochs => 5,
         :n_gibbs => 1,
         :reporter => TestReporter()
     )
@@ -153,7 +153,7 @@ function test{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input
 
         # Check that none of the array fields contain Infs or NaNs
         for name in fieldnames(rbm)
-            if isa(fieldtype(typeof(rbm), name), AbstractArray)
+            if fieldtype(typeof(rbm), name) <: AbstractArray
                 field = getfield(rbm, name)
 
                 @test !any(isnan, field) && !any(isinf, field)
@@ -282,8 +282,9 @@ function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; input_size=-1
     end
 
     X = generate_dataset(T, n_vis; n_obs=n_obs)
-    args = [map(ctx -> (X, opt), options)]
-    return compare(fit, [rbm, deepcopy(rbm)], args)
+    args = [map(opt -> (X, opt), options)...]
+    rbms = map(i -> deepcopy(rbm), 1:length(args))
+    return compare(fit, rbms, args)
 end
 
 
