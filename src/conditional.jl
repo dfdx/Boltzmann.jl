@@ -229,7 +229,7 @@ function update_classic!(crbm::ConditionalRBM, X::Mat,
 end
 
 
-function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
+function free_energy(crbm::ConditionalRBM, vis::Mat)
     vb = sum(vis .* crbm.dyn_vbias, 1)
     Wx_b_log = sum(log(1 + exp(crbm.W * vis .+ crbm.dyn_hbias)), 1)
     result = - vb - Wx_b_log
@@ -239,7 +239,7 @@ function free_energy{T}(crbm::ConditionalRBM, vis::Mat{T})
 end
 
 
-function fit_batch!{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict())
+function fit_batch!(crbm::ConditionalRBM, X::Mat, ctx = Dict())
     grad = @get_or_create(ctx, :gradient, gradient_classic)
     upd = @get_or_create(ctx, :update, update_classic!)
     curr, cond = split_vis(crbm, X)
