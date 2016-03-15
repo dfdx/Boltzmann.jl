@@ -268,7 +268,7 @@ function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts = Dict{Any,Any}())
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
                 batch = full(X[:, batch_start:batch_end])
-                batch = convert(Array{T}, batch)
+                batch = ensure_type(T, batch)
                 fit_batch!(crbm, batch, ctx)
             end
         end
@@ -284,27 +284,28 @@ function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts = Dict{Any,Any}())
     return crbm
 end
 
-fit(crbm::ConditionalRBM, X::Mat; opts...) = fit(crbm, X, Dict(opts))
+fit{T}(crbm::ConditionalRBM{T}, X::Mat; opts...) = fit(crbm, X, Dict(opts))
 
 
-function transform(crbm::ConditionalRBM, X::Mat)
-    curr, cond = split_vis(crbm, X)
+function transform{T}(crbm::ConditionalRBM{T}, X::Mat)
+    curr, cond = split_vis(crbm, ensure_type(T, X))
     dynamic_biases!(crbm, cond)
     return hid_means(crbm, curr)
 end
 
 
-function generate(crbm::ConditionalRBM, X::Mat; n_gibbs=1)
-    curr, cond = split_vis(crbm, X)
+function generate{T}(crbm::ConditionalRBM{T}, X::Mat; n_gibbs=1)
+    curr, cond = split_vis(crbm, ensure_type(T, X))
     dynamic_biases!(crbm, cond)
     return gibbs(crbm, curr; n_times=n_gibbs)[3]
 end
 
-generate(crbm::ConditionalRBM, vis::Vec; n_gibbs=1) =
-    generate(crbm, reshape(vis, length(vis), 1); n_gibbs=n_gibbs)
+generate{T}(crbm::ConditionalRBM{T}, vis::Vec; n_gibbs=1) =
+    generate(crbm, reshape(ensure_type(T, vis), length(vis), 1); n_gibbs=n_gibbs)
 
 
-function predict(crbm::ConditionalRBM, cond::Mat; n_gibbs=1)
+function predict{T}(crbm::ConditionalRBM{T}, cond::Mat; n_gibbs=1)
+    cond = ensure_type(T, cond)
     @assert size(cond, 1) == size(crbm.A, 2)
 
     curr = sub(cond, 1:length(crbm.vbias), :)
@@ -313,10 +314,10 @@ function predict(crbm::ConditionalRBM, cond::Mat; n_gibbs=1)
     return generate(crbm, vis; n_gibbs=n_gibbs)
 end
 
-predict(crbm::ConditionalRBM, cond::Vec; n_gibbs=1) =
-    predict(crbm, reshape(cond, length(cond), 1); n_gibbs=n_gibbs)
+predict{T}(crbm::ConditionalRBM{T}, cond::Vec; n_gibbs=1) =
+    predict(crbm, reshape(ensure_type(T, cond), length(cond), 1); n_gibbs=n_gibbs)
 
 
-predict(crbm::ConditionalRBM, vis::Vec, cond::Vec; n_gibbs=1) =
+predict{T}(crbm::ConditionalRBM{T}, vis::Vec, cond::Vec{T}; n_gibbs=1) =
     predict(crbm, reshape(vis, length(vis), 1),
-            reshape(cond, length(cond), 1); n_gibbs=n_gibbs)
+            reshape(ensure_type(T, cond), length(cond), 1); n_gibbs=n_gibbs)

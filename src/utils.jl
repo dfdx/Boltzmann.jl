@@ -143,3 +143,12 @@ function tofinite!(x::Array; nozeros=false)
         end
     end
 end
+
+
+function ensure_type(newT::DataType, A::AbstractArray)
+    if eltype(A) != newT
+        map(newT, A)
+    else
+        A
+    end
+end
