@@ -195,11 +195,11 @@ function grad_apply_sparsity!(rbm::ConditionalRBM, X::Mat,
                   throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, vis))
     penalty = cost * (curr_sparsity - target)
-    axpy!(-penalty, dW, dW)
-    axpy!(-penalty, dA, dA)
-    axpy!(-penalty, dB, dB)
-    axpy!(-penalty, db, db)
-    axpy!(-penalty, dc, dc)
+    axpy!(-penalty, ones(size(dW)), dW)
+    axpy!(-penalty, ones(size(dA)), dA)
+    axpy!(-penalty, ones(size(dB)), dB)
+    axpy!(-penalty, ones(size(db)), db)
+    axpy!(-penalty, ones(size(dc)), dc)
 end
 
 
