@@ -183,7 +183,7 @@ function grad_apply_weight_decay!(rbm::ConditionalRBM,
 end
 
 
-function grad_apply_sparsity!(rbm::ConditionalRBM, X::Mat,
+function grad_apply_sparsity!{T}(rbm::ConditionalRBM{T}, X::Mat,
                                  dtheta::Tuple, ctx::Dict)
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
@@ -194,12 +194,12 @@ function grad_apply_sparsity!(rbm::ConditionalRBM, X::Mat,
     target = @get(ctx, :sparsity_target,
                   throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, vis))
-    penalty = cost * (curr_sparsity - target)
-    axpy!(-penalty, dW, dW)
-    axpy!(-penalty, dA, dA)
-    axpy!(-penalty, dB, dB)
-    axpy!(-penalty, db, db)
-    axpy!(-penalty, dc, dc)
+    penalty = T(cost * (curr_sparsity - target))
+    add!(dW, -penalty)
+    add!(dA, -penalty)
+    add!(dB, -penalty)
+    add!(db, -penalty)
+    add!(dc, -penalty)
 end
 
 

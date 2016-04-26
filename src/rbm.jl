@@ -298,7 +298,7 @@ function grad_apply_weight_decay!(rbm::RBM, X::Mat,
 
 end
 
-function grad_apply_sparsity!(rbm::RBM, X::Mat,
+function grad_apply_sparsity!{T}(rbm::RBM{T}, X::Mat,
                               dtheta::Tuple, ctx::Dict)
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
@@ -307,10 +307,10 @@ function grad_apply_sparsity!(rbm::RBM, X::Mat,
     cost = @get_or_return(ctx, :sparsity_cost, nothing)
     target = @get(ctx, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, X))
-    penalty = cost * (curr_sparsity - target)
-    axpy!(-penalty, dW, dW)
-    axpy!(-penalty, db, db)
-    axpy!(-penalty, dc, dc)
+    penalty = T(cost * (curr_sparsity - target))
+    add!(dW, -penalty)
+    add!(db, -penalty)
+    add!(dc, -penalty)
 end
 
 
@@ -378,7 +378,7 @@ docstrings/code for details.
 
 NOTE: this function is incremental, so one can, for example, run it for
 10 epochs, then inspect the model, then run it for 10 more epochs
-and check the difference. 
+and check the difference.
 """
 function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
