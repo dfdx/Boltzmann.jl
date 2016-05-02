@@ -84,7 +84,7 @@ end
 
 
 const KNOWN_OPTIONS =
-    [:gradient, :update, :sampler, :scorer, :reporter,
+    [:debug, :gradient, :update, :sampler, :scorer, :reporter,
      :batch_size, :n_epochs, :n_gibbs,
      :lr, :momentum, :weight_decay_kind, :weight_decay_rate,
      :sparsity_cost, :sparsity_target,
@@ -95,11 +95,13 @@ const DEPRECATED_OPTIONS = Dict(:n_iter => :n_epochs)
 
 function check_options(opts::Dict)
     deprecated_keys = keys(DEPRECATED_OPTIONS)
+    debug = get(opts, :debug, true)
+
     for opt in keys(opts)
-        if !in(opt, KNOWN_OPTIONS)
+        if debug && !in(opt, KNOWN_OPTIONS)
             warn("Option '$opt' is unknownm ignoring")
         end
-        if in(opt, deprecated_keys)
+        if debug && in(opt, deprecated_keys)
             warn("Option '$opt' is deprecated, " *
                  "use '$(DEPRECATED_OPTIONS[opt])' instead")
         end
