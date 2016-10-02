@@ -1,12 +1,13 @@
 
+using Base.LinAlg
 using Base.LinAlg.BLAS
 using Distributions
 import StatsBase.fit
 import StatsBase.coef
 import StatsBase: sample, sample!
 
-typealias Mat{T} AbstractArray{T, 2}
-typealias Vec{T} AbstractArray{T, 1}
+@runonce typealias Mat{T} AbstractArray{T, 2}
+@runonce typealias Vec{T} AbstractArray{T, 1}
 typealias Gaussian Normal
 
 
@@ -380,7 +381,7 @@ NOTE: this function is incremental, so one can, for example, run it for
 10 epochs, then inspect the model, then run it for 10 more epochs
 and check the difference.
 """
-function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
+function fit{T}(rbm::RBM{T}, X::Mat, opts::Dict{Any,Any}=Dict{Any,Any}())
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
     check_options(ctx)
@@ -409,7 +410,7 @@ function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     return rbm
 end
 
-fit(rbm::RBM, X::Mat; opts...) = fit(rbm, X, Dict(opts))
+fit(rbm::RBM, X::Mat; opts...) = fit(rbm, X, Dict{Any,Any}(opts))
 
 
 ## operations on learned RBM

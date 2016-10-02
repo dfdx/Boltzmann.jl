@@ -250,7 +250,7 @@ function fit_batch!(crbm::ConditionalRBM, X::Mat, ctx = Dict())
 end
 
 
-function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts = Dict{Any,Any}())
+function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any})
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
     n_examples = size(X, 2)

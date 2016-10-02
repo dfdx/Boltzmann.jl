@@ -57,7 +57,7 @@ converged(r::TestReporter) = mean(r.ratios) < 1.0
 Simply returns a DefaultContext Dict.
 """
 function DefaultContext()
-    return Dict(
+    return Dict{Any,Any}(
         :weight_decay_kind => :l2,
         :weight_decay_rate => 0.001,
         :sparsity_cost => 0.001,
