@@ -230,7 +230,7 @@ function grad_apply_momentum!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
     momentum = @get(ctx, :momentum, 0.9)
     dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
     # same as: dW += momentum * dW_prev
-    axpy!(momentum, dW_prev, dW)
+    Base.LinAlg.axpy!(momentum, dW_prev, dW)
 end
 
 
@@ -245,10 +245,10 @@ function grad_apply_weight_decay!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
     is_l2 = @get(ctx, :l2, false)
     if decay_kind == :l2
         # same as: dW -= decay_rate * W
-        axpy!(-decay_rate, rbm.W, dW)
+        Base.LinAlg.axpy!(-decay_rate, rbm.W, dW)
     elseif decay_kind == :l1
         # same as: dW -= decay_rate * sign(W)
-        axpy!(-decay_rate, sign(rbm.W), dW)
+        Base.LinAlg.axpy!(-decay_rate, sign(rbm.W), dW)
     end
 
 end
@@ -263,15 +263,15 @@ function grad_apply_sparsity!{T,V,H}(rbm::RBM{T,V,H}, X::Mat{T},
     target = @get(ctx, :sparsity_target, throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, X))
     penalty = cost * (curr_sparsity - target)
-    axpy!(-penalty, dW, dW)
-    axpy!(-penalty, db, db)
-    axpy!(-penalty, dc, dc)
+    Base.LinAlg.axpy!(-penalty, dW, dW)
+    Base.LinAlg.axpy!(-penalty, db, db)
+    Base.LinAlg.axpy!(-penalty, dc, dc)
 end
 
 
 function update_weights!(rbm::RBM, dtheta::Tuple, ctx::Dict)
     dW, db, dc = dtheta
-    axpy!(1.0, dW, rbm.W)
+    Base.LinAlg.axpy!(1.0, dW, rbm.W)
     rbm.vbias += db
     rbm.hbias += dc
     # save previous dW
@@ -304,7 +304,9 @@ end
 
 
 function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
+    opts = convert(Dict{Any,Any},opts)
     @assert minimum(X) >= 0 && maximum(X) <= 1
+    @show opts
     ctx = copy(opts)
     check_options(ctx)
     n_examples = size(X, 2)

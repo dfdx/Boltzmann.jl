@@ -155,7 +155,7 @@ function grad_apply_momentum!{T,V,H}(crbm::ConditionalRBM{T,V,H}, X::Mat{T},
     momentum = @get(ctx, :momentum, 0.9)
     dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
     # same as: dW += momentum * dW_prev
-    axpy!(momentum, dW_prev, dW)
+    Base.LinAlg.axpy!(momentum, dW_prev, dW)
 end
 
 
@@ -171,14 +171,14 @@ function grad_apply_weight_decay!{T,V,H}(rbm::ConditionalRBM{T,V,H},
     is_l2 = @get(ctx, :l2, false)
     if decay_kind == :l2
         # same as: dW -= decay_rate * W
-        axpy!(-decay_rate, rbm.W, dW)
-        axpy!(-decay_rate, rbm.A, dA)
-        axpy!(-decay_rate, rbm.B, dB)
+        Base.LinAlg.axpy!(-decay_rate, rbm.W, dW)
+        Base.LinAlg.axpy!(-decay_rate, rbm.A, dA)
+        Base.LinAlg.axpy!(-decay_rate, rbm.B, dB)
     elseif decay_kind == :l1
         # same as: dW -= decay_rate * sign(W)
-        axpy!(-decay_rate, sign(rbm.W), dW)
-        axpy!(-decay_rate, sign(rbm.A), dA)
-        axpy!(-decay_rate, sign(rbm.B), dB)
+        Base.LinAlg.axpy!(-decay_rate, sign(rbm.W), dW)
+        Base.LinAlg.axpy!(-decay_rate, sign(rbm.A), dA)
+        Base.LinAlg.axpy!(-decay_rate, sign(rbm.B), dB)
     end
 end
 
@@ -195,19 +195,19 @@ function grad_apply_sparsity!{T,V,H}(rbm::ConditionalRBM{T,V,H}, X::Mat{T},
                   throw(ArgumentError("If :sparsity_cost is used, :sparsity_target should also be defined")))
     curr_sparsity = mean(hid_means(rbm, vis))
     penalty = cost * (curr_sparsity - target)
-    axpy!(-penalty, dW, dW)
-    axpy!(-penalty, dA, dA)
-    axpy!(-penalty, dB, dB)
-    axpy!(-penalty, db, db)
-    axpy!(-penalty, dc, dc)
+    Base.LinAlg.axpy!(-penalty, dW, dW)
+    Base.LinAlg.axpy!(-penalty, dA, dA)
+    Base.LinAlg.axpy!(-penalty, dB, dB)
+    Base.LinAlg.axpy!(-penalty, db, db)
+    Base.LinAlg.axpy!(-penalty, dc, dc)
 end
 
 
 function update_weights!(crbm::ConditionalRBM, dtheta::Tuple, ctx::Dict)
     dW, dA, dB, db, dc = dtheta
-    axpy!(1.0, dW, crbm.W)
-    axpy!(1.0, dA, crbm.A)
-    axpy!(1.0, dB, crbm.B)
+    Base.LinAlg.axpy!(1.0, dW, crbm.W)
+    Base.LinAlg.axpy!(1.0, dA, crbm.A)
+    Base.LinAlg.axpy!(1.0, dB, crbm.B)
     crbm.vbias += db
     crbm.hbias += dc
     # save previous dW
@@ -248,6 +248,7 @@ end
 
 
 function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
+    ctx = convert(Dict{Any,Any},ctx)
     @assert minimum(X) >= 0 && maximum(X) <= 1
     n_examples = size(X, 2)
     batch_size = @get(ctx, :batch_size, 100)
@@ -276,7 +277,7 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
     return crbm
 end
 
-fit{T}(crbm::ConditionalRBM, X::Mat{T}; opts...) = fit(crbm, X, Dict(opts))
+fit{T}(crbm::ConditionalRBM, X::Mat{T}; opts...) = fit(crbm, X, Dict{Any,Any}(opts))
 
 
 function transform{T}(crbm::ConditionalRBM, X::Mat{T})
