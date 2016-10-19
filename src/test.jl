@@ -283,6 +283,7 @@ function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; input_size=-1
 
     X = generate_dataset(T, n_vis; n_obs=n_obs)
     args = [map(opt -> (X, opt), options)...]
+    deepcopy(rbm)
     rbms = map(i -> deepcopy(rbm), 1:length(args))
     return compare(fit, rbms, args)
 end
