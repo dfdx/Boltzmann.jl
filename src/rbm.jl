@@ -306,7 +306,6 @@ end
 function fit{T}(rbm::RBM{T}, X::Mat, opts = Dict{Any,Any}())
     opts = convert(Dict{Any,Any},opts)
     @assert minimum(X) >= 0 && maximum(X) <= 1
-    @show opts
     ctx = copy(opts)
     check_options(ctx)
     n_examples = size(X, 2)

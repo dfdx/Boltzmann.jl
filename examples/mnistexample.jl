@@ -19,7 +19,7 @@ function plot_weights(W, imsize, padding=10)
         dat[(r-1)*(h+padding)+halfpad+1 : r*(h+padding)-halfpad,
             (c-1)*(w+padding)+halfpad+1 : c*(w+padding)-halfpad] = wim
     end
-    view(dat)
+    ImageView.view(dat)
     return dat
 end
 
@@ -37,4 +37,3 @@ run_mnist()
 
 println("Press RETURN when ready")
 readline(STDIN)
-

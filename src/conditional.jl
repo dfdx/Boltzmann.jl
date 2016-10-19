@@ -277,7 +277,7 @@ function fit{T}(crbm::ConditionalRBM, X::Mat{T}, ctx = Dict{Any,Any}())
     return crbm
 end
 
-fit{T}(crbm::ConditionalRBM, X::Mat{T}; opts...) = fit(crbm, X, Dict{Any,Any}(opts))
+fit{T}(crbm::ConditionalRBM, X::Mat{T}; opts...) = fit(crbm, X, Dict(opts))
 
 
 function transform{T}(crbm::ConditionalRBM, X::Mat{T})
