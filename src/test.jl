@@ -283,7 +283,12 @@ function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; input_size=-1
 
     X = generate_dataset(T, n_vis; n_obs=n_obs)
     args = [map(opt -> (X, opt), options)...]
+    
+    # temporary workaround for https://github.com/JuliaLang/julia/issues/19041
+    # should have been closed by https://github.com/JuliaLang/julia/pull/18457
+    # but need to check once the package is testable on Julia 0.6
     deepcopy(rbm)
+    
     rbms = map(i -> deepcopy(rbm), 1:length(args))
     return compare(fit, rbms, args)
 end
