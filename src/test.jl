@@ -13,7 +13,7 @@ confirm that a given RBM is learning something.
 NOTE: current we just store the calculated ratios from each epoch,
 but we could probably just do an online mean calculation.
 """
-type TestReporter
+mutable struct TestReporter
     ratios::Vec{Float64}
     prev::Float64
     log::Bool
@@ -128,7 +128,7 @@ Optional:
 NOTE: Only using dense arrays for the dataset cause the conditional rbm doesn't support
 sparse ones yet.
 """
-function test{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, n_obs=1000, debug=false)
+function test(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, n_obs=1000, debug=false) where {T,V,H}
     n_hid, n_vis = size(rbm.W)
 
     if input_size > 0
@@ -180,7 +180,7 @@ Args:
 
 Returns: a DataFrame of the results
 """
-function compare{R<:AbstractRBM, T<:Tuple}(func::Function, rbms::Array{R,1}, args::Array{T,1})
+function compare(func::Function, rbms::Array{R,1}, args::Array{T,1}) where {R<:AbstractRBM, T<:Tuple}
     @eval import Benchmark
     @assert length(rbms) == length(args)
 
@@ -214,7 +214,7 @@ Returns: a DataFrame of the results
 NOTE: For now we're only using dense matrices cause the conditional rbm doesn't
 work with sparse ones.
 """
-function compare{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, debug=false, n_obs=1000)
+function compare(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, debug=false, n_obs=1000) where {T,V,H}
     @eval using DataFrames
 
     ctx = deepcopy(opts)
@@ -275,7 +275,7 @@ Optional:
 
 Returns: a DataFrame of the results
 """
-function compare{T,V,H}(rbm::AbstractRBM{T,V,H}, options::Dict...; input_size=-1, n_obs=1000)
+function compare(rbm::AbstractRBM{T,V,H}, options::Dict...; input_size=-1, n_obs=1000) where {T,V,H}
     n_hid, n_vis = size(rbm.W)
     if input_size > 0
         n_vis = input_size
@@ -312,7 +312,7 @@ Optional:
 
 Returns: a DataFrame of the results
 """
-function benchmark{T,V,H}(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, debug=false, n_obs=1000)
+function benchmark(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-1, debug=false, n_obs=1000) where {T,V,H}
     @eval begin
         using DataFrames
         import Benchmark

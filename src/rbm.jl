@@ -85,7 +85,7 @@ GRBM(n_vis::Int, n_hid::Int; sigma=0.01) =
     RBM(Float64, Normal, Bernoulli, n_vis, n_hid; sigma=sigma)
 
 
-function Base.show{T,V,H}(io::IO, rbm::RBM{T,V,H})
+function Base.show(io::IO, rbm::RBM{T,V,H}) where {T,V,H}
     n_vis = size(rbm.vbias, 1)
     n_hid = size(rbm.hbias, 1)
     print(io, "RBM{$V,$H}($n_vis, $n_hid)")
@@ -93,13 +93,13 @@ end
 
 ## utils
 
-function hid_means{T}(rbm::RBM, vis::Mat{T})
+function hid_means(rbm::RBM, vis::Mat{T}) where T
     p = rbm.W * vis .+ rbm.hbias
     return logistic(p)
 end
 
 
-function vis_means{T}(rbm::RBM, hid::Mat{T})
+function vis_means(rbm::RBM, hid::Mat{T}) where T
     p = rbm.W' * hid .+ rbm.vbias
     return logistic(p)
 end
@@ -107,16 +107,16 @@ end
 
 ## samping
 
-function sample{T}(::Type{Degenerate}, means::Mat{T})
+function sample(::Type{Degenerate}, means::Mat{T}) where T
     return means
 end
 
-function sample{T}(::Type{Bernoulli}, means::Mat{T})
+function sample(::Type{Bernoulli}, means::Mat{T}) where T
     return map(T, float((rand(size(means)) .< means)))
 end
 
 
-function sample{T}(::Type{Gaussian}, means::Mat{T})
+function sample(::Type{Gaussian}, means::Mat{T}) where T
     sigma2 = 1                   # using fixed standard diviation
     samples = zeros(T,size(means))
     for j=1:size(means, 2), i=1:size(means, 1)
@@ -126,13 +126,13 @@ function sample{T}(::Type{Gaussian}, means::Mat{T})
 end
 
 
-function sample_hiddens{T,V,H}(rbm::AbstractRBM{T,V,H}, vis::Mat)
+function sample_hiddens(rbm::AbstractRBM{T,V,H}, vis::Mat) where {T,V,H}
     means = hid_means(rbm, vis)
     return sample(H, means)
 end
 
 
-function sample_visibles{T,V,H}(rbm::AbstractRBM{T,V,H}, hid::Mat)
+function sample_visibles(rbm::AbstractRBM{T,V,H}, hid::Mat) where {T,V,H}
     means = vis_means(rbm, hid)
     return sample(V, means)
 end
@@ -242,7 +242,7 @@ Returns:
  * (dW, db, dc) - tuple of gradients for weights, visible and hidden biases,
                   respectively
 """
-function gradient_classic{T}(rbm::RBM, vis::Mat{T}, ctx::Dict)
+function gradient_classic(rbm::RBM, vis::Mat{T}, ctx::Dict) where T
     sampler = @get_or_create(ctx, :sampler, persistent_contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(rbm, vis, ctx)
     dW = @get_array(ctx, :dW_buf, size(rbm.W), similar(rbm.W))
@@ -259,8 +259,8 @@ end
 
 ## updating
 
-function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat,
-                                          dtheta::Tuple, ctx::Dict)
+function grad_apply_learning_rate!(rbm::RBM{T,V,H}, X::Mat,
+                                   dtheta::Tuple, ctx::Dict) where {T,V,H}
     dW, db, dc = dtheta
     lr = T(@get(ctx, :lr, 0.1))
     # same as: dW *= lr
@@ -270,8 +270,8 @@ function grad_apply_learning_rate!{T,V,H}(rbm::RBM{T,V,H}, X::Mat,
 end
 
 
-function grad_apply_momentum!{T}(rbm::RBM{T}, X::Mat,
-                                 dtheta::Tuple, ctx::Dict)
+function grad_apply_momentum!(rbm::RBM{T}, X::Mat,
+                              dtheta::Tuple, ctx::Dict) where T
     dW, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
     dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
@@ -299,8 +299,8 @@ function grad_apply_weight_decay!(rbm::RBM, X::Mat,
 
 end
 
-function grad_apply_sparsity!{T}(rbm::RBM{T}, X::Mat,
-                              dtheta::Tuple, ctx::Dict)
+function grad_apply_sparsity!(rbm::RBM{T}, X::Mat,
+                           dtheta::Tuple, ctx::Dict) where T
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
     # than the expected (hence why it isn't squared or the abs())
@@ -381,7 +381,7 @@ NOTE: this function is incremental, so one can, for example, run it for
 10 epochs, then inspect the model, then run it for 10 more epochs
 and check the difference.
 """
-function fit{T}(rbm::RBM{T}, X::Mat, opts::Dict{Any,Any}=Dict{Any,Any}())
+function fit(rbm::RBM{T}, X::Mat, opts::Dict{Any,Any}=Dict{Any,Any}()) where T
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
     check_options(ctx)
@@ -416,17 +416,17 @@ fit(rbm::RBM, X::Mat; opts...) = fit(rbm, X, Dict{Any,Any}(opts))
 ## operations on learned RBM
 
 """Base data X through trained RBM to obtain compressed representation"""
-function transform{T}(rbm::RBM{T}, X::Mat)
+function transform(rbm::RBM{T}, X::Mat) where T
     return hid_means(rbm, ensure_type(T, X))
 end
 
 
 """Given trained RBM and sample of visible data, generate similar items"""
-function generate{T}(rbm::RBM{T}, vis::Vec; n_gibbs=1)
+function generate(rbm::RBM{T}, vis::Vec; n_gibbs=1) where T
     return gibbs(rbm, reshape(ensure_type(T, vis), length(vis), 1); n_times=n_gibbs)[3]
 end
 
-function generate{T}(rbm::RBM{T}, X::Mat; n_gibbs=1)
+function generate(rbm::RBM{T}, X::Mat; n_gibbs=1) where T
     return gibbs(rbm, ensure_type(T, X); n_times=n_gibbs)[3]
 end
 

@@ -25,7 +25,7 @@
 import StatsBase: predict
 
 
-@runonce type ConditionalRBM{T,V,H} <: AbstractRBM{T,V,H}
+@runonce mutable struct ConditionalRBM{T,V,H} <: AbstractRBM{T,V,H}
     W::Matrix{T}  # standard weights
     A::Matrix{T}  # autoregressive params (vis to vis)
     B::Matrix{T}  # hidden params(vis to hid)
@@ -68,7 +68,7 @@ function ConditionalRBM(V::Type, H::Type, n_vis::Int, n_hid::Int;
 end
 
 
-function Base.show{T,V,H}(io::IO, crbm::ConditionalRBM{T,V,H})
+function Base.show(io::IO, crbm::ConditionalRBM{T,V,H}) where {T,V,H}
     n_vis = size(crbm.vbias, 1)
     n_hid = size(crbm.hbias, 1)
     n_cond = size(crbm.A, 2)
@@ -104,8 +104,8 @@ function vis_means(crbm::ConditionalRBM, hid::Mat)
 end
 
 
-function gradient_classic{T}(crbm::ConditionalRBM{T}, X::Mat{T},
-                          ctx::Dict)
+function gradient_classic(crbm::ConditionalRBM{T}, X::Mat{T},
+                       ctx::Dict) where T
     vis, cond = split_vis(crbm, X)
     sampler = @get_or_create(ctx, :sampler, persistent_contdiv)
     v_pos, h_pos, v_neg, h_neg = sampler(crbm, vis, ctx)
@@ -135,9 +135,9 @@ function gradient_classic{T}(crbm::ConditionalRBM{T}, X::Mat{T},
 end
 
 
-function grad_apply_learning_rate!{T}(crbm::ConditionalRBM{T},
-                                      X::Mat{T},
-                                      dtheta::Tuple, ctx::Dict)
+function grad_apply_learning_rate!(crbm::ConditionalRBM{T},
+                                   X::Mat{T},
+                                   dtheta::Tuple, ctx::Dict) where T
     dW, dA, dB, db, dc = dtheta
     lr = T(@get(ctx, :lr, 0.1))
     # same as: dW *= lr
@@ -149,8 +149,8 @@ function grad_apply_learning_rate!{T}(crbm::ConditionalRBM{T},
 end
 
 
-function grad_apply_momentum!{T}(crbm::ConditionalRBM{T}, X::Mat{T},
-                                 dtheta::Tuple, ctx::Dict)
+function grad_apply_momentum!(crbm::ConditionalRBM{T}, X::Mat{T},
+                              dtheta::Tuple, ctx::Dict) where T
     dW, dA, dB, db, dc = dtheta
     momentum = @get(ctx, :momentum, 0.9)
     dW_prev = @get_array(ctx, :dW_prev, size(dW), zeros(T, size(dW)))
@@ -183,8 +183,8 @@ function grad_apply_weight_decay!(rbm::ConditionalRBM,
 end
 
 
-function grad_apply_sparsity!{T}(rbm::ConditionalRBM{T}, X::Mat,
-                                 dtheta::Tuple, ctx::Dict)
+function grad_apply_sparsity!(rbm::ConditionalRBM{T}, X::Mat,
+                              dtheta::Tuple, ctx::Dict) where T
     # The sparsity constraint should only drive the weights
     # down when the mean activation of hidden units is higher
     # than the expected (hence why it isn't squared or the abs())
@@ -250,7 +250,7 @@ function fit_batch!(crbm::ConditionalRBM, X::Mat, ctx = Dict())
 end
 
 
-function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any})
+function fit(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any}) where T
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
     n_examples = size(X, 2)
@@ -284,27 +284,27 @@ function fit{T}(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any})
     return crbm
 end
 
-fit{T}(crbm::ConditionalRBM{T}, X::Mat; opts...) = fit(crbm, X, Dict(opts))
+fit(crbm::ConditionalRBM{T}, X::Mat; opts...) where {T} = fit(crbm, X, Dict(opts))
 
 
-function transform{T}(crbm::ConditionalRBM{T}, X::Mat)
+function transform(crbm::ConditionalRBM{T}, X::Mat) where T
     curr, cond = split_vis(crbm, ensure_type(T, X))
     dynamic_biases!(crbm, cond)
     return hid_means(crbm, curr)
 end
 
 
-function generate{T}(crbm::ConditionalRBM{T}, X::Mat; n_gibbs=1)
+function generate(crbm::ConditionalRBM{T}, X::Mat; n_gibbs=1) where T
     curr, cond = split_vis(crbm, ensure_type(T, X))
     dynamic_biases!(crbm, cond)
     return gibbs(crbm, curr; n_times=n_gibbs)[3]
 end
 
-generate{T}(crbm::ConditionalRBM{T}, vis::Vec; n_gibbs=1) =
+generate(crbm::ConditionalRBM{T}, vis::Vec; n_gibbs=1) where {T} =
     generate(crbm, reshape(ensure_type(T, vis), length(vis), 1); n_gibbs=n_gibbs)
 
 
-function predict{T}(crbm::ConditionalRBM{T}, cond::Mat; n_gibbs=1)
+function predict(crbm::ConditionalRBM{T}, cond::Mat; n_gibbs=1) where T
     cond = ensure_type(T, cond)
     @assert size(cond, 1) == size(crbm.A, 2)
 
@@ -314,10 +314,10 @@ function predict{T}(crbm::ConditionalRBM{T}, cond::Mat; n_gibbs=1)
     return generate(crbm, vis; n_gibbs=n_gibbs)
 end
 
-predict{T}(crbm::ConditionalRBM{T}, cond::Vec; n_gibbs=1) =
+predict(crbm::ConditionalRBM{T}, cond::Vec; n_gibbs=1) where {T} =
     predict(crbm, reshape(ensure_type(T, cond), length(cond), 1); n_gibbs=n_gibbs)
 
 
-predict{T}(crbm::ConditionalRBM{T}, vis::Vec, cond::Vec{T}; n_gibbs=1) =
+predict(crbm::ConditionalRBM{T}, vis::Vec, cond::Vec{T}; n_gibbs=1) where {T} =
     predict(crbm, reshape(vis, length(vis), 1),
             reshape(ensure_type(T, cond), length(cond), 1); n_gibbs=n_gibbs)
