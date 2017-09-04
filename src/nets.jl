@@ -10,7 +10,7 @@ struct DBN <: Net
     layernames::Vector{AbstractString}
 end
 
-DBN{LT<:Tuple{AbstractString,RBM}}(namedlayers::Vector{LT}) =
+DBN(namedlayers::Vector{LT}) where {LT<:Tuple{AbstractString,RBM}} =
     DBN(map(p -> p[2], namedlayers), map(p -> p[1], namedlayers))
     
 
@@ -75,7 +75,7 @@ function fit(dbn::DBN, X::Mat{Float64}; ctx = Dict{Any,Any}())
     end
 end
 
-fit{T}(dbn::DBN, X::Mat{T}; opts...) = fit(rbm, X, Dict(opts))
+fit(dbn::DBN, X::Mat{T}; opts...) where {T} = fit(rbm, X, Dict(opts))
 
 
 function invert(rbm::RBM)

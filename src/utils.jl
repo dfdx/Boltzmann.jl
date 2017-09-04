@@ -155,7 +155,7 @@ function ensure_type(newT::DataType, A::AbstractArray)
     end
 end
 
-function add!{T}(X::Array{T}, inc::T)
+function add!(X::Array{T}, inc::T) where T
     @simd for i=1:length(X)
         @inbounds X[i] += inc
     end
