@@ -3,9 +3,9 @@
 
 import Base.getindex
 
-abstract Net
+abstract type Net end
 
-immutable DBN <: Net
+struct DBN <: Net
     layers::Vector{RBM}
     layernames::Vector{AbstractString}
 end
@@ -14,7 +14,7 @@ DBN{LT<:Tuple{AbstractString,RBM}}(namedlayers::Vector{LT}) =
     DBN(map(p -> p[2], namedlayers), map(p -> p[1], namedlayers))
     
 
-immutable DAE <: Net
+struct DAE <: Net
     layers::Vector{RBM}
     layernames::Vector{AbstractString}
 end

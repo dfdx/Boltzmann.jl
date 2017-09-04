@@ -6,9 +6,9 @@ import StatsBase.fit
 import StatsBase.coef
 import StatsBase: sample, sample!
 
-@runonce typealias Mat{T} AbstractArray{T, 2}
-@runonce typealias Vec{T} AbstractArray{T, 1}
-typealias Gaussian Normal
+@runonce const Mat{T} = AbstractArray{T, 2}
+@runonce const Vec{T} = AbstractArray{T, 1}
+const Gaussian = Normal
 
 
 """
@@ -17,7 +17,7 @@ to provide stable result equal to provided means:
 
 sample(Degenerate, means) = means
 """
-type Degenerate <: Distribution{Distributions.Univariate,
+struct Degenerate <: Distribution{Distributions.Univariate,
                                Distributions.Discrete}
 end
 
@@ -36,13 +36,13 @@ end
      * V - type of visible units
      * H - type of hidden units
     """
-    abstract AbstractRBM{T,V,H}
+    abstract type AbstractRBM{T,V,H} end
 
     """
     Restricted Boltzmann Machine, parametrized by element type T, visible
     unit type V and hidden unit type H.
     """
-    type RBM{T,V,H} <: AbstractRBM{T,V,H}
+    struct RBM{T,V,H} <: AbstractRBM{T,V,H}
         W::Matrix{T}         # matrix of weights between vis and hid vars
         vbias::Vector{T}     # biases for visible variables
         hbias::Vector{T}     # biases for hidden variables
@@ -66,7 +66,7 @@ Optional parameters:
 """
 function RBM(T::Type, V::Type, H::Type,
              n_vis::Int, n_hid::Int; sigma=0.01)
-    RBM{T,V,H}(map(T, rand(Normal(0, sigma), (n_hid, n_vis))),
+    RBM{T,V,H}(map(T, rand(Normal(0, sigma), n_hid, n_vis)),
              zeros(n_vis), zeros(n_hid))
 end
 

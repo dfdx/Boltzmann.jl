@@ -1,7 +1,7 @@
 
-abstract AbstractReporter
+abstract type AbstractReporter end
 
-type TextReporter
+struct TextReporter
 end
 
 function report(r::TextReporter, rbm::AbstractRBM,
