@@ -1,11 +1,30 @@
 
 
 if !isdefined(:__EXPRESSION_HASHES__)
-    __EXPRESSION_HASHES__ = Set{UInt64}()
+    __EXPRESSION_HASHES__ = Set{AbstractString}()
 end
 
+"""
+If loaded twice without changes, evaluate expression only for the first time.
+This is useful for reloading code in REPL. For example, the following code will
+produce `invalid redifinition` error if loaded twice:
+
+    type Point{T}
+        x::T
+        y::T
+    end
+
+Wrapped into @runonce, however, the code is reloaded fine:
+
+    @runonce type Point{T}
+        x::T
+        y::T
+    end
+
+@runonce doesn't have any affect on expression itself.
+"""
 macro runonce(expr)
-    h = hash(expr)
+    h = string(expr)
     return esc(quote
         if !in($h, __EXPRESSION_HASHES__)
             push!(__EXPRESSION_HASHES__, $h)
@@ -17,13 +36,13 @@ end
 
 """Same as `get` function, but evaluates default_expr only if needed"""
 macro get(dict, key, default_expr)
-    return quote
+    return esc(quote
         if haskey($dict, $key)
             $dict[$key]
         else
             $default_expr
         end
-    end
+    end)
 end
 
 
@@ -32,12 +51,12 @@ Same as `@get`, but creates new object from `default_expr` if
 it didn't exist before
 """
 macro get_or_create(dict, key, default_expr)
-    return quote
+    return esc(quote
         if !haskey($dict, $key)
             $dict[$key] = $default_expr
         end
         $dict[$key]
-    end
+    end)
 end
 
 
@@ -47,14 +66,14 @@ Same as `@get`, but immediately exits function and return `default_expr`
 if key doesn't exist.
 """
 macro get_or_return(dict, key, default_expr)
-    return quote
+    return esc(quote
         if haskey($dict, $key)
             $dict[$key]
         else
             return $default_expr
             nothing  # not reachable, but without it code won't compile
         end
-    end
+    end)
 end
 
 """
@@ -64,17 +83,19 @@ using `default_expr`. If element exists, but is not an error,
 throw ArgumentError.
 """
 macro get_array(dict, key, sz, default_expr)
-    return quote
+    return esc(quote
         if (haskey($dict, $key) && !isa($dict[$key], Array))
-            local k = $key
-            throw(ArgumentError("Key `$k` exists, but is not an array"))
+           let
+              local k = $key
+              throw(ArgumentError("Key `$k` exists, but is not an array"))
+           end
         end
         if (!haskey($dict, $key) || size($dict[$key]) != $sz)
             # ensure $default_expr results in an ordinary array
             $dict[$key] = convert(Array, $default_expr)
         end
         $dict[$key]
-    end
+    end)
 end
 
 
@@ -111,7 +132,7 @@ end
 
 function split_evenly(n, len)
     n_parts = Int(ceil(n / len))
-    parts = Array(Tuple, n_parts)
+    parts = Array{Tuple}(n_parts)
     for i=1:n_parts
         start_idx = (i-1)*len + 1
         end_idx = min(i*len, n)

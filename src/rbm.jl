@@ -42,7 +42,7 @@ end
     Restricted Boltzmann Machine, parametrized by element type T, visible
     unit type V and hidden unit type H.
     """
-    struct RBM{T,V,H} <: AbstractRBM{T,V,H}
+    mutable struct RBM{T,V,H} <: AbstractRBM{T,V,H}
         W::Matrix{T}         # matrix of weights between vis and hid vars
         vbias::Vector{T}     # biases for visible variables
         hbias::Vector{T}     # biases for hidden variables
@@ -156,10 +156,10 @@ end
 function free_energy(rbm::RBM, vis::Mat)
     vb = sum(vis .* rbm.vbias, 1)
 
-    fe_exp = 1 + exp(rbm.W * vis .+ rbm.hbias)
+    fe_exp = 1 + exp.(rbm.W * vis .+ rbm.hbias)
     tofinite!(fe_exp; nozeros=true)
 
-    Wx_b_log = sum(log(fe_exp), 1)
+    Wx_b_log = sum(log.(fe_exp), 1)
     result = - vb - Wx_b_log
 
     return result
@@ -185,7 +185,7 @@ function score_samples(rbm::AbstractRBM, vis::Mat;
     fe_corrupted = free_energy(rbm, vis_corrupted)
     fe_diff = fe_corrupted - fe
     tofinite!(fe_diff; nozeros=true)
-    score_row =  n_feat * log(logistic(fe_diff))
+    score_row =  n_feat * log.(logistic(fe_diff))
 
     result = map(Float64, squeeze(score_row', 2))
     tofinite!(result)
