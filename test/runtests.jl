@@ -1,4 +1,3 @@
-
 using Base.Test
 using Boltzmann
 # using Benchmark
@@ -11,7 +10,7 @@ Available test groups are:
 * :acceptance,
 * :benchmark,
 =#
-const DEFAULT_TEST_GROUPS = Set([:unit, :integration])
+const DEFAULT_TEST_GROUPS = Set([:unit])
 TEST_GROUPS = DEFAULT_TEST_GROUPS
 
 # If the JULIA_TEST_GROUPS ENV variable is set
