@@ -24,16 +24,14 @@ if :benchmark in TEST_GROUPS
         n_vis = 100
         n_hid = 10
 
-        results = DataFrame()
+        suite = BenchmarkGroup()
+
         for T in [Float32, Float64]
             rbm = RBM(T, Gaussian, Bernoulli, n_vis, n_hid)
-            df = Boltzmann.benchmark(rbm; debug=true)
-            df[:Type] = fill(T, size(df, 1))
-            results = vcat(results, df)
+            suite = benchmark!(rbm, suite; debug=true)
         end
 
-        # For now just print the output, but we may want load a CSV containing
-        # existing master benchmarks and compare the two here.
-        println(results)
+        tune!(suite)
+        results = run(suite, verbose=true, seconds=10)
     end
 end

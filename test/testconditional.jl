@@ -58,17 +58,15 @@ if :benchmark in TEST_GROUPS
         n_cond = 750
         n_hid = 200
 
-        results = DataFrame()
+        suite = BenchmarkGroup()
+
         for T in [Float32, Float64]
             model = ConditionalRBM(T, Bernoulli, Bernoulli, n_vis, n_hid, n_cond)
-            df = Boltzmann.benchmark(model; input_size=1000, debug=true)
-            df[:Type] = fill(T, size(df, 1))
-            results = vcat(results, df)
+            suite = benchmark!(model, suite; input_size=1000, debug=true)
         end
 
-        # For now just print the output, but we may want load a CSV containing
-        # existing master benchmarks and compare the two here.
-        println(results)
+        tune!(suite)
+        results = run(suite, verbose=true, seconds=10)
     end
 end
 
