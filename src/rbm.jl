@@ -381,7 +381,7 @@ NOTE: this function is incremental, so one can, for example, run it for
 10 epochs, then inspect the model, then run it for 10 more epochs
 and check the difference.
 """
-function fit(rbm::RBM{T}, X::Mat, opts::Dict{Any,Any}=Dict{Any,Any}()) where T
+function fit(rbm::RBM{T}, X::Mat, opts::Dict{Any,Any}) where T
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
     check_options(ctx)

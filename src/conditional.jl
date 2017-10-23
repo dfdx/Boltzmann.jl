@@ -39,9 +39,9 @@ end
 function ConditionalRBM(T::Type, V::Type, H::Type,
                         n_vis::Int, n_hid::Int, n_cond::Int; sigma=0.01)
     ConditionalRBM{T,V,H}(
-        map(T, rand(Normal(0, sigma), (n_hid, n_vis))),
-        map(T, rand(Normal(0, sigma), (n_vis, n_cond))),
-        map(T, rand(Normal(0, sigma), (n_hid, n_cond))),
+        map(T, rand(Normal(0, sigma), n_hid, n_vis)),
+        map(T, rand(Normal(0, sigma), n_vis, n_cond)),
+        map(T, rand(Normal(0, sigma), n_hid, n_cond)),
         zeros(T, n_vis),
         zeros(T, n_hid),
         zeros(T, n_vis),
@@ -231,7 +231,7 @@ end
 
 function free_energy(crbm::ConditionalRBM, vis::Mat)
     vb = sum(vis .* crbm.dyn_vbias, 1)
-    Wx_b_log = sum(log(1 + exp(crbm.W * vis .+ crbm.dyn_hbias)), 1)
+    Wx_b_log = sum(log.(1 + exp.(crbm.W * vis .+ crbm.dyn_hbias)), 1)
     result = - vb - Wx_b_log
     tofinite!(result)
 
@@ -284,7 +284,7 @@ function fit(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any}) where T
     return crbm
 end
 
-fit(crbm::ConditionalRBM{T}, X::Mat; opts...) where {T} = fit(crbm, X, Dict(opts))
+fit(crbm::ConditionalRBM{T}, X::Mat; opts...) where {T} = fit(crbm, X, Dict{Any,Any}(opts))
 
 
 function transform(crbm::ConditionalRBM{T}, X::Mat) where T
@@ -308,7 +308,7 @@ function predict(crbm::ConditionalRBM{T}, cond::Mat; n_gibbs=1) where T
     cond = ensure_type(T, cond)
     @assert size(cond, 1) == size(crbm.A, 2)
 
-    curr = sub(cond, 1:length(crbm.vbias), :)
+    curr = view(cond, 1:length(crbm.vbias), :)
     vis = vcat(curr, cond)
 
     return generate(crbm, vis; n_gibbs=n_gibbs)
