@@ -42,7 +42,7 @@ Base.endof(net::Net) = length(net)
 
 
 function hid_means_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
-    hiddens = Array(Array{Float64, 2}, layer)
+    hiddens = Array{Array{Float64, 2}}(layer)
     hiddens[1] = hid_means(net[1], batch)
     for k=2:layer
         hiddens[k] = hid_means(net[k], hiddens[k-1])
@@ -89,8 +89,8 @@ end
 
 function unroll(dbn::DBN)
     n = length(dbn)
-    layers = Array(RBM, 2n)
-    layernames = Array(String, 2n)
+    layers = Array{RBM}(2n)
+    layernames = Array{String}(2n)
     layers[1:n] = dbn.layers
     layernames[1:n] = dbn.layernames
     for i=1:n

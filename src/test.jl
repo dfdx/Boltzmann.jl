@@ -96,7 +96,7 @@ function generate_dataset(T::Type, n_features; n_classes=10, n_obs=1000, sparsit
         end
 
         if binary
-            return round(X)
+            return round.(X)
         else
             return X
         end

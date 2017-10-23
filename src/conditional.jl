@@ -231,7 +231,7 @@ end
 
 function free_energy(crbm::ConditionalRBM, vis::Mat)
     vb = sum(vis .* crbm.dyn_vbias, 1)
-    Wx_b_log = sum(log(1 + exp(crbm.W * vis .+ crbm.dyn_hbias)), 1)
+    Wx_b_log = sum(log.(1 + exp.(crbm.W * vis .+ crbm.dyn_hbias)), 1)
     result = - vb - Wx_b_log
     tofinite!(result)
 
@@ -250,7 +250,7 @@ function fit_batch!(crbm::ConditionalRBM, X::Mat, ctx = Dict())
 end
 
 
-function fit(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any}=Dict{Any,Any}()) where T
+function fit(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any}) where T
     @assert minimum(X) >= 0 && maximum(X) <= 1
     ctx = copy(opts)
     n_examples = size(X, 2)

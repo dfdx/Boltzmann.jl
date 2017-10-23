@@ -1,6 +1,6 @@
 language: julia
 os:
-  # - osx
+  - osx
   - linux
 julia:
   - 0.6
@@ -11,6 +11,13 @@ addons:
   apt:
     packages:
     - hdf5-tools
+matrix:
+  fast_finish: true
+  allow_failures:
+  - julia: nightly
+  exclude:
+  - julia: nightly
+    os: osx
 before_install:
   - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 script:
