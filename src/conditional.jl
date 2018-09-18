@@ -129,8 +129,8 @@ function gradient_classic(crbm::ConditionalRBM{T}, X::Mat{T},
     gemm!('N', 'T', T(1 / n_obs), h_pos, cond, T(-1.0), dB)
 
     # gradient for vbias and hbias
-    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
-    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ n_obs
+    db = dropdims(sum(v_pos, dims = 2) - sum(v_neg, dims = 2), dims = 2) ./ n_obs
+    dc = dropdims(sum(h_pos, dims = 2) - sum(h_neg, dims = 2), dims = 2) ./ n_obs
     return dW, dA, dB, db, dc
 end
 
@@ -212,7 +212,7 @@ function update_weights!(crbm::ConditionalRBM, dtheta::Tuple, ctx::Dict)
     crbm.hbias += dc
     # save previous dW
     dW_prev = @get_array(ctx, :dW_prev, size(dW), similar(dW))
-    copy!(dW_prev, dW)
+    copyto!(dW_prev, dW)
 end
 
 
@@ -230,8 +230,8 @@ end
 
 
 function free_energy(crbm::ConditionalRBM, vis::Mat)
-    vb = sum(vis .* crbm.dyn_vbias, 1)
-    Wx_b_log = sum(log.(1 + exp.(crbm.W * vis .+ crbm.dyn_hbias)), 1)
+    vb = sum(vis .* crbm.dyn_vbias, dims = 1)
+    Wx_b_log = sum(log.(1 .+ exp.(crbm.W * vis .+ crbm.dyn_hbias)), dims = 1)
     result = - vb - Wx_b_log
     tofinite!(result)
 
@@ -267,7 +267,7 @@ function fit(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any}) where T
             for (batch_start, batch_end) in batch_idxs
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
-                batch = full(X[:, batch_start:batch_end])
+                batch = Matrix(X[:, batch_start:batch_end])
                 batch = ensure_type(T, batch)
                 fit_batch!(crbm, batch, ctx)
             end
@@ -275,9 +275,9 @@ function fit(crbm::ConditionalRBM{T}, X::Mat, opts::Dict{Any,Any}) where T
         curr, cond = split_vis(crbm, X)
         dynamic_biases!(crbm, cond)
 
-        # We convert to full, to avoid changing the the n_obs if
+        # We convert to a dense matrix, to avoid changing the the n_obs if
         # X is a sparse matrix
-        score = scorer(crbm, full(curr))
+        score = scorer(crbm, Matrix(curr))
         report(reporter, crbm, epoch, epoch_time, score)
     end
 

@@ -1,6 +1,5 @@
-
 using Boltzmann
-using MNIST
+using MLDatasets.MNIST: traindata
 using ImageView
 
 function plot_weights(W, imsize, padding=10)
@@ -19,13 +18,14 @@ function plot_weights(W, imsize, padding=10)
         dat[(r-1)*(h+padding)+halfpad+1 : r*(h+padding)-halfpad,
             (c-1)*(w+padding)+halfpad+1 : c*(w+padding)-halfpad] = wim
     end
-    ImageView.view(dat)
+    imshow(dat)
     return dat
 end
 
 
 function run_mnist()
     X, y = testdata()  # test data is smaller, no need to downsample
+    X = Float64.(reshape(X, 784, :))
     X = X ./ (maximum(X) - minimum(X))
     m = RBM(Degenerate, Bernoulli, 28*28, 300)
     fit(m, X, n_epochs=20, randomize=true)
@@ -36,5 +36,5 @@ end
 run_mnist()
 
 println("Press RETURN when ready")
-readline(STDIN)
+readline(stdin)
 

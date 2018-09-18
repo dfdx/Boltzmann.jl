@@ -1,6 +1,6 @@
 
-using Base.LinAlg
-using Base.LinAlg.BLAS
+using LinearAlgebra
+using LinearAlgebra.BLAS
 using Distributions
 import StatsBase.fit
 import StatsBase.coef
@@ -112,7 +112,7 @@ function sample(::Type{Degenerate}, means::Mat{T}) where T
 end
 
 function sample(::Type{Bernoulli}, means::Mat{T}) where T
-    return map(T, float((rand(size(means)) .< means)))
+    return map(T, float((rand(T, size(means)) .< means)))
 end
 
 
@@ -154,12 +154,12 @@ end
 ## scoring
 
 function free_energy(rbm::RBM, vis::Mat)
-    vb = sum(vis .* rbm.vbias, 1)
+    vb = sum(vis .* rbm.vbias, dims = 1)
 
-    fe_exp = 1 + exp.(rbm.W * vis .+ rbm.hbias)
+    fe_exp = 1 .+ exp.(rbm.W * vis .+ rbm.hbias)
     tofinite!(fe_exp; nozeros=true)
 
-    Wx_b_log = sum(log.(fe_exp), 1)
+    Wx_b_log = sum(log.(fe_exp), dims = 1)
     result = - vb - Wx_b_log
 
     return result
@@ -172,7 +172,7 @@ function score_samples(rbm::AbstractRBM, vis::Mat;
         # sparse matrices may be infeasible for this operation
         # so using only little sample
         cols = rand(1:size(vis, 2), sample_size)
-        vis = full(vis[:, cols])
+        vis = Matrix(vis[:, cols])
     end
     n_feat, n_samples = size(vis)
     vis_corrupted = copy(vis)
@@ -187,7 +187,7 @@ function score_samples(rbm::AbstractRBM, vis::Mat;
     tofinite!(fe_diff; nozeros=true)
     score_row =  n_feat * log.(logistic(fe_diff))
 
-    result = map(Float64, squeeze(score_row', 2))
+    result = map(Float64, dropdims(score_row', dims = 2))
     tofinite!(result)
 
     return result
@@ -229,7 +229,7 @@ function persistent_contdiv(rbm::AbstractRBM, vis::Mat, ctx::Dict)
     # take negative samples from "fantasy particles"
     _, _, v_neg, h_neg = gibbs(rbm, persistent_chain, n_times=n_gibbs)
     # save persistent_chain
-    copy!(ctx[:persistent_chain], v_neg)
+    copyto!(ctx[:persistent_chain], v_neg)
     return v_pos, h_pos, v_neg, h_neg
 end
 
@@ -253,8 +253,9 @@ function gradient_classic(rbm::RBM, vis::Mat{T}, ctx::Dict) where T
     gemm!('N', 'T', T(1 / n_obs), h_neg, v_neg, T(0.0), dW)
     gemm!('N', 'T', T(1 / n_obs), h_pos, v_pos, T(-1.0), dW)
     # gradient for vbias and hbias
-    db = squeeze(sum(v_pos, 2) - sum(v_neg, 2), 2) ./ n_obs
-    dc = squeeze(sum(h_pos, 2) - sum(h_neg, 2), 2) ./ n_obs
+    db = dropdims(sum(v_pos, dims = 2) - sum(v_neg, dims = 2), dims = 2) ./ n_obs
+    dc = dropdims(sum(h_pos, dims = 2) - sum(h_neg, dims = 2), dims = 2) ./ n_obs
+
     return dW, db, dc
 end
 
@@ -324,7 +325,7 @@ function update_weights!(rbm::RBM, dtheta::Tuple, ctx::Dict)
     rbm.hbias += dc
     # save previous dW
     dW_prev = @get_array(ctx, :dW_prev, size(dW), similar(dW))
-    copy!(dW_prev, dW)
+    copyto!(dW_prev, dW)
 end
 
 
@@ -401,7 +402,7 @@ function fit(rbm::RBM{T}, X::Mat, opts::Dict{Any,Any}) where T
             for (batch_start, batch_end) in batch_idxs
                 # BLAS.gemm! can't handle sparse matrices, so cheaper
                 # to make it dense here
-                batch = full(X[:, batch_start:batch_end])
+                batch = Matrix(X[:, batch_start:batch_end])
                 batch = ensure_type(T, batch)
                 fit_batch!(rbm, batch, ctx)
             end

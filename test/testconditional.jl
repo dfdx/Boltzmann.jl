@@ -1,7 +1,7 @@
 using Boltzmann
 using Distributions
-using Base.Test
-using MNIST
+using Test
+using MLDatasets.MNIST
 
 
 function _get_dataset(X)
@@ -31,7 +31,7 @@ end
 
 if :acceptance in TEST_GROUPS
     @testset "Conditional RBM Acceptance" begin
-        train_X = _get_dataset(traindata()[1][:, 1:10000])
+	train_X = _get_dataset(Float64.(reshape(traindata()[1], 784, :))[:, 1:10000])
         input_size = round(Int, size(train_X, 1) / 2)
 
         model = ConditionalRBM(Bernoulli, Bernoulli, input_size, 500; steps=1)
