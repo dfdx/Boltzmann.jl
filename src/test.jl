@@ -3,7 +3,8 @@ The following file contains various function to help smoke test and benchmark
 arbitrary AbstractRBMs and configurations.
 =#
 
-using Base.Test
+using Test
+using SparseArrays
 
 """
 The TestReporter uses the ratio test or D'Alembert's criterion
@@ -19,7 +20,7 @@ mutable struct TestReporter
     log::Bool
 
     function TestReporter(log=false)
-        new(Array{Float64}(0), NaN, log)
+        new(Array{Float64, 1}(undef, 0), NaN, log)
     end
 end
 
@@ -31,7 +32,7 @@ will be printed.
 function report(r::TestReporter, rbm::AbstractRBM,
                 epoch::Int, epoch_time::Float64, score::Float64)
     if epoch == 1
-        r.ratios = Array{Float64}(0)
+        r.ratios = Array{Float64, 1}(undef, 0)
         r.prev = NaN
     end
 
@@ -144,15 +145,15 @@ function test(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-
     end
 
     for X in (DX, SX)
-        info("Testing against $(typeof(X).name)")
-        info("Testing fit")
+        @info("Testing against $(typeof(X).name)")
+        @info("Testing fit")
         fit(rbm, X, ctx)
 
-        info("Testing for convergence")
+        @info("Testing for convergence")
         @test converged(ctx[:reporter])
 
         # Check that none of the array fields contain Infs or NaNs
-        for name in fieldnames(rbm)
+	for name in fieldnames(typeof(rbm))
             if fieldtype(typeof(rbm), name) <: AbstractArray
                 field = getfield(rbm, name)
 
@@ -160,11 +161,11 @@ function test(rbm::AbstractRBM{T,V,H}; opts::Dict=DefaultContext(), input_size=-
             end
         end
 
-        info("Testing transform")
+        @info("Testing transform")
         Y = transform(rbm, X)
         @test !any(isnan, Y) && !any(isinf, Y)
 
-        info("Testing generate")
+        @info("Testing generate")
         Y = generate(rbm, X)
         @test !any(isnan, Y) && !any(isinf, Y)
     end

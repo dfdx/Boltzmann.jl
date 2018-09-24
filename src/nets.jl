@@ -38,11 +38,11 @@ end
 getindex(net::Net, k::Int) = getmodel(net, k)
 getindex(net::Net, name::AbstractString) = getmodel(net, name)
 Base.length(net::Net) = length(net.layers)
-Base.endof(net::Net) = length(net)
+Base.lastindex(net::Net) = length(net)
 
 
 function hid_means_at_layer(net::Net, batch::Array{Float64, 2}, layer::Int)
-    hiddens = Array{Array{Float64, 2}}(layer)
+    hiddens = Array{Array{Float64, 2}}(undef, layer)
     hiddens[1] = hid_means(net[1], batch)
     for k=2:layer
         hiddens[k] = hid_means(net[k], hiddens[k-1])
@@ -75,7 +75,7 @@ function fit(dbn::DBN, X::Mat{Float64}; ctx = Dict{Any,Any}())
     end
 end
 
-fit(dbn::DBN, X::Mat{T}; opts...) where {T} = fit(rbm, X, Dict(opts))
+fit(dbn::DBN, X::Mat{T}; opts...) where {T} = fit(dbn, X, Dict(opts))
 
 
 function invert(rbm::RBM)
@@ -89,8 +89,8 @@ end
 
 function unroll(dbn::DBN)
     n = length(dbn)
-    layers = Array{RBM}(2n)
-    layernames = Array{String}(2n)
+    layers = Array{RBM}(undef, 2n)
+    layernames = Array{String}(undef, 2n)
     layers[1:n] = dbn.layers
     layernames[1:n] = dbn.layernames
     for i=1:n

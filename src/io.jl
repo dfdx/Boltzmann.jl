@@ -3,7 +3,7 @@ using HDF5
 
 
 function save_params(file::HDF5File, rbm::RBM, name::AbstractString)
-    write(file, "$(name)___weight", rbm.W')
+    write(file, "$(name)___weight", copy(rbm.W'))
     write(file, "$(name)___vbias", rbm.vbias)
     write(file, "$(name)___bias", rbm.hbias)
 end

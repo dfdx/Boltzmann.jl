@@ -1,6 +1,6 @@
 
 
-if !isdefined(:__EXPRESSION_HASHES__)
+if !isdefined(@__MODULE__, :__EXPRESSION_HASHES__)
     __EXPRESSION_HASHES__ = Set{AbstractString}()
 end
 
@@ -100,7 +100,7 @@ end
 
 
 function logistic(x)
-    return 1 ./ (1 + exp.(-x))
+    return 1 ./ (1 .+ exp.(-x))
 end
 
 
@@ -120,10 +120,10 @@ function check_options(opts::Dict)
 
     for opt in keys(opts)
         if debug && !in(opt, KNOWN_OPTIONS)
-            warn("Option '$opt' is unknownm ignoring")
+            @warn("Option '$opt' is unknown, ignoring")
         end
         if debug && in(opt, deprecated_keys)
-            warn("Option '$opt' is deprecated, " *
+            @warn("Option '$opt' is deprecated, " *
                  "use '$(DEPRECATED_OPTIONS[opt])' instead")
         end
     end
@@ -132,7 +132,7 @@ end
 
 function split_evenly(n, len)
     n_parts = Int(ceil(n / len))
-    parts = Array{Tuple}(n_parts)
+    parts = Array{Tuple}(undef, n_parts)
     for i=1:n_parts
         start_idx = (i-1)*len + 1
         end_idx = min(i*len, n)
