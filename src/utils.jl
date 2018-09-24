@@ -120,10 +120,10 @@ function check_options(opts::Dict)
 
     for opt in keys(opts)
         if debug && !in(opt, KNOWN_OPTIONS)
-            warn("Option '$opt' is unknownm ignoring")
+            @warn("Option '$opt' is unknown, ignoring")
         end
         if debug && in(opt, deprecated_keys)
-            warn("Option '$opt' is deprecated, " *
+            @warn("Option '$opt' is deprecated, " *
                  "use '$(DEPRECATED_OPTIONS[opt])' instead")
         end
     end
