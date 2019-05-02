@@ -11,6 +11,9 @@ addons:
   apt:
     packages:
     - hdf5-tools
+env:
+  global:
+    - DATADEPS_ALWAYS_ACCEPT="true"
 matrix:
   fast_finish: true
   allow_failures:
