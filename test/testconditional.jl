@@ -5,7 +5,7 @@ using MLDatasets.MNIST
 
 
 function _get_dataset(X)
-    X = round(X ./ (maximum(X) - minimum(X)))
+    X = round.(X ./ (maximum(X) - minimum(X)))
     X_c = copy(X)   # the corrupted images
 
     # Flip 10% of bits in X_c
@@ -31,13 +31,14 @@ end
 
 if :acceptance in TEST_GROUPS
     @testset "Conditional RBM Acceptance" begin
-	train_X = _get_dataset(Float64.(reshape(traindata()[1], 784, :))[:, 1:10000])
-        input_size = round(Int, size(train_X, 1) / 2)
+        X = MNIST.convert2features(traindata()[1])[:, 1:10000]
+        train_X = _get_dataset(X)
+	    input_size = round(Int, size(train_X, 1) / 2)
 
         model = ConditionalRBM(Bernoulli, Bernoulli, input_size, 500; steps=1)
         fit(model, train_X; n_epochs=10, n_gibbs=5)
 
-        test_X = _get_dataset(testdata()[1][:, 1:1000])
+        test_X = _get_dataset(X)
         corrupt_start = input_size + 1
         forecast = predict(model, test_X[corrupt_start:end,:]; n_gibbs=20)
 
@@ -69,4 +70,3 @@ if :benchmark in TEST_GROUPS
         results = run(suite, verbose=true, seconds=10)
     end
 end
-

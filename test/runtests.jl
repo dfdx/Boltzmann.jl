@@ -64,7 +64,7 @@ TEST_GROUPS = DEFAULT_TEST_GROUPS
 # then use the inte
 if haskey(ENV, "JULIA_TEST_GROUPS")
     TEST_GROUPS = Set(
-        Symbol[split(ENV["JULIA_TEST_GROUPS"])...]
+        Symbol.(split(ENV["JULIA_TEST_GROUPS"]))
     )
 end
 
